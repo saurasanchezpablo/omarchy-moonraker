@@ -100,6 +100,11 @@ Panel {
   property var lastSnapshot: null
   property string soonSentFor: ""
   property real userActionAt: 0
+  // Per-kind time of the last notification, and whether a snapshot for one
+  // is being fetched (one at a time, so pictures can't swap).
+  property var notifiedAt: ({})
+  property bool snapshotBusy: false
+  property real lanesRepollAt: 0
   property string thumbnailSource: ""
   property string thumbnailFor: ""
   // Webcams from /server/webcams/list (Model.webcamList entries).
@@ -403,7 +408,11 @@ Panel {
       if (lanesKey !== afcLanesKey) {
         afcLanesKey = lanesKey
         afcLaneObjects = Model.afcLaneObjects(afcObjects, status.AFC)
-        Qt.callLater(poll)
+        // At most one early poll per interval, even if the list keeps changing.
+        if (Date.now() - lanesRepollAt > pollSeconds * 1000) {
+          lanesRepollAt = Date.now()
+          Qt.callLater(poll)
+        }
       }
     }
     if (light && !lightBusy) lightOn = Model.lightIsOn(light, status)
@@ -444,14 +453,20 @@ Panel {
       var e = events[i]
       if (e.kind === "soon") soonSentFor = filename
       if (mine && (e.kind === "paused" || e.kind === "cancelled")) continue
-      if (notifyEnabled && notifySnapshot && e.kind !== "soon") notifyWithSnapshot(e)
+      // A printer flapping between states gets one notice per kind per 30 s.
+      var now = Date.now()
+      if (now - (notifiedAt[e.kind] || 0) < 30000) continue
+      notifiedAt[e.kind] = now
+      if (notifyEnabled && notifySnapshot && e.kind !== "soon" && !snapshotBusy) notifyWithSnapshot(e)
       else notify(e)
     }
   }
 
   // Attach what the camera sees right now; the text goes out regardless.
   function notifyWithSnapshot(e) {
+    snapshotBusy = true
     grabSnapshot(function(path) {
+      root.snapshotBusy = false
       if (path !== "") e.image = path
       root.notify(e)
     })
@@ -650,6 +665,7 @@ Panel {
     afc = null
     changeOrigin = ""
     lastSnapshot = null
+    snapshotBusy = false
     light = null
     lightOn = false
     pauseMacros = false

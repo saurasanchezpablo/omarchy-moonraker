@@ -19,6 +19,14 @@
   now follows `--`. The web UI opens through a detached argument list instead
   of a shell command, and without `$XDG_RUNTIME_DIR` the plugin's files go to
   `~/.cache` instead of a predictable `/tmp` folder.
+- Security: lists from the printer (lanes, webcams, spools, objects) are
+  capped, object names Klipper would parse differently are refused, thumbnail
+  paths can't leave the gcodes folder, and webcam URLs can't point at the
+  desktop's own local services. A printer flapping between states sends one
+  notification per kind per 30 s, and lane changes can't trigger a poll storm.
+- Security (development tools): the mock's proxy forwards only file metadata,
+  thumbnails, and the webcam, and needs its own test key, so other local
+  programs can't use it to read the printer's config with the real key.
 
 ## 0.2.1 — 2026-10-07
 
