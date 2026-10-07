@@ -42,7 +42,10 @@ omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http
 - By default the fake job gets synthesized metadata and `dev/assets/thumbnail.png`.
 - `--upstream`/`--file`: proxy file metadata, thumbnails, and the webcam to a real printer instead.
   Its API key, if needed, goes in the environment: `read -rs MOONRAKER_API_KEY && export MOONRAKER_API_KEY`.
-  The proxy never follows redirects (they would carry the key to another host) and caps answers at 8 MB.
+  The proxy never follows redirects (they would carry the key to another host), caps answers at 8 MB,
+  forwards only file metadata, `.thumbs/` images, and the webcam, and needs a test key for the mock
+  itself (`MOCK_REQUIRE_KEY`, also kept out of the process list), so other local programs can't use it
+  to reach the printer.
 - `--require-key`: reject requests without this key (tests the auth states).
 - `--spoolman`: simulate Moonraker's Spoolman integration with three spools (one multi-color); with `--afc`, lanes accept `SET_SPOOL_ID`.
 - `--afc`: simulate a 4-lane Elegoo Canvas (AFC). The `toolchange-unload`,

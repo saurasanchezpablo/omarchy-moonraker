@@ -209,6 +209,9 @@ class Handler(BaseHTTPRequestHandler):
             self.local_file(self.path.split("?")[0])
             return
         path = self.path.split("?token=")[0]
+        if not proxy_allowed(path):
+            self.send_err(403, "the mock only proxies file metadata, thumbnails, and the webcam")
+            return
         req = urllib.request.Request(args.upstream + path)
         if upstream_key:
             req.add_header("X-Api-Key", upstream_key)
@@ -416,6 +419,22 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json("ok")
 
 
+def proxy_allowed(path):
+    """Only what the widget needs from a real printer, never other endpoints
+    (config files, G-code, /access/api_key) that the forwarded key could open."""
+    route, _, query = path.partition("?")
+    if ".." in urllib.parse.unquote(route).split("/") or "\\" in urllib.parse.unquote(route):
+        return False
+    if route == "/server/files/metadata":
+        return True
+    if route.startswith("/server/files/gcodes/"):
+        name = urllib.parse.unquote(route).lower()
+        return "/.thumbs/" in name and name.endswith((".png", ".jpg", ".jpeg"))
+    if route == "/server/webcams/list":
+        return True
+    return route == "/webcam/" and query in ("action=snapshot", "")
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None   # surfaces as an HTTPError, relayed as 502
@@ -434,7 +453,8 @@ def main():
     # Kept only to refuse it: a key in argv is visible to every local user.
     ap.add_argument("--api-key", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--require-key", default="",
-                    help="reject requests without this X-Api-Key (a made-up test key, never a real one)")
+                    help="reject requests without this X-Api-Key (a made-up test key, never a real one; "
+                         "MOCK_REQUIRE_KEY in the environment keeps it out of the process list)")
     ap.add_argument("--thumbnail", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "thumbnail.png"),
                     help="PNG served as the job thumbnail when there is no --upstream")
     ap.add_argument("--webcam", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "webcam.jpg"),
@@ -455,6 +475,11 @@ def main():
         args.upstream = args.upstream.rstrip("/")
     # Taken out of the environment so nothing started later inherits it.
     upstream_key = os.environ.pop("MOONRAKER_API_KEY", "")
+    args.require_key = os.environ.pop("MOCK_REQUIRE_KEY", "") or args.require_key
+    if args.upstream and not args.require_key:
+        # Otherwise any local process could use the mock to reach the printer
+        # with the real key.
+        ap.error("--upstream needs a test key for the mock itself: set MOCK_REQUIRE_KEY")
     scenario["name"] = args.scenario
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 

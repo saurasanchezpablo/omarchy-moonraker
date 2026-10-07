@@ -21,7 +21,9 @@ ID=io.github.saurasanchezpablo.moonraker-plus
 CFG="$HOME/.config/omarchy/shell.json"
 OUT=docs/screenshots
 PORT=7125
-MOCK_KEY=demo-api-key-1234
+# A fresh test key per run, handed to the mock through its environment:
+# with UPSTREAM set, it gates access to a proxy that holds the real key.
+MOCK_KEY=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 MOCK_URL="http://127.0.0.1:$PORT"
 FILE=${FILE:-calibration-cube.gcode}
 
@@ -106,9 +108,9 @@ capture() {
   echo "captured $name"
 }
 
-mock_args=(--port "$PORT" --require-key "$MOCK_KEY" --file "$FILE")
+mock_args=(--port "$PORT" --file "$FILE")
 [[ -n ${UPSTREAM:-} ]] && mock_args+=(--upstream "$UPSTREAM")
-MOONRAKER_API_KEY=$upstream_key python3 dev/mock_moonraker.py "${mock_args[@]}" &
+MOCK_REQUIRE_KEY=$MOCK_KEY MOONRAKER_API_KEY=$upstream_key python3 dev/mock_moonraker.py "${mock_args[@]}" &
 MOCK_PID=$!
 upstream_key=
 
