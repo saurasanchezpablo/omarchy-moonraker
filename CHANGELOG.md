@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-10-07
+
+- The Tools button is always available, not only while printing. Between
+  prints it arms a pause at a chosen layer of the next print, shown as
+  "Next print pauses at layer N" under the title until it fires or is
+  cleared. Sections that don't apply (no layers, a single object, missing
+  macros) show a short note instead of disappearing.
+
 ## 0.2.0 — 2026-10-07
 
 First release of **Moonraker Printer Plus**, an extended fork of

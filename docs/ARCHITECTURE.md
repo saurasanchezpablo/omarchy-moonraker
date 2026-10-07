@@ -160,7 +160,12 @@ Mainsail's and Fluidd's standard configs ship `SET_PAUSE_AT_LAYER` and
 `SET_PAUSE_NEXT_LAYER`, which store their plan in `SET_PRINT_STATS_INFO`'s
 variables and fire when the slicer's `SET_PRINT_STATS_INFO CURRENT_LAYER=…`
 reaches it. When all three macros exist, those two variables join the status
-query. The Tools button appears only while printing with known layers.
+query. The Tools button is always there once the printer answers; sections
+that don't apply show a short note instead. Nothing in Klipper resets the plan
+until it fires, so between prints the layer field arms a pause for the next
+print (1–9999, the next job's layer count being unknown), and a pending plan
+is shown under the popup's title. "Pause after this layer" needs a running
+print with known layers.
 Commands are built from integers only (`SET_PAUSE_AT_LAYER LAYER=120`,
 `ENABLE=0` to clear, `SET_PAUSE_NEXT_LAYER ENABLE=1`).
 

@@ -38,8 +38,8 @@ i Canvas, Voron, RatRig, Creality K-series z Klipperem i innymi.
   kliknięcie pozwala wybrać inną szpulę. Widoczne tylko, gdy Moonraker ma
   skonfigurowany Spoolman.
 - **Sterowanie**: pauza, wznowienie i anulowanie. Anulowanie trzeba kliknąć drugi raz, żeby potwierdzić.
-- **Narzędzia wydruku** (przycisk Tools w trakcie druku albo klawisz `t`): pauza na
-  wybranej warstwie albo po bieżącej, np. żeby włożyć magnesy (wymaga standardowych
+- **Narzędzia wydruku** (przycisk Tools albo klawisz `t`): pauza na
+  wybranej warstwie albo po bieżącej (między wydrukami: dla następnego wydruku), np. żeby włożyć magnesy (wymaga standardowych
   makr pauzy z Mainsail/Fluidd i slicera, który podaje numery warstw), oraz
   pominięcie jednego obiektu z płyty, gdy się nie udał, bez przerywania reszty
   (wymaga `[exclude_object]`).

@@ -174,10 +174,15 @@ Panel {
 
   readonly property bool iconOnly: barLabel.indexOf(" ") < 0
   // Layer-based tools only work when the slicer reports layers.
-  readonly property bool canPauseAtLayer: pauseMacros && printing && totalLayer > 0
+  // Between prints the plan is armed for the next one (nothing resets it
+  // until it fires), so pause at layer works while idle too.
+  readonly property bool canPauseAtLayer: pauseMacros && online && klippyReady && (!printing || totalLayer > 0)
+  readonly property bool canPauseNextLayer: pauseMacros && printing && totalLayer > 0
+  readonly property bool pauseArmedForNext: !printing && (pausePlan.atLayer > 0 || pausePlan.nextLayer)
   // Skipping the only object would just cancel the print.
   readonly property bool canSkip: excludeSupported && printing && excludeObjects.length > 1
-  readonly property bool hasTools: canPauseAtLayer || canSkip
+  // Always offered once connected; sections explain what isn't available.
+  readonly property bool hasTools: configured && online
 
   readonly property string heroStatus: {
     if (!configured) return "Not configured"
@@ -812,7 +817,6 @@ Panel {
       settingsOpen = !configured || authFailed
       cancelArmed = false
       skipArmed = ""
-      if (!printing) toolsOpen = false
       urlField.text = setting("url", "")
       keyField.text = setting("apiKey", "")
       poll()
@@ -1132,6 +1136,27 @@ Panel {
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           wrapMode: Text.Wrap
+        }
+
+        // A pause armed between prints fires in the next one: keep it visible.
+        Text {
+          visible: root.pauseArmedForNext
+          width: parent.width
+          textFormat: Text.PlainText
+          text: Model.ICONS.pause + "  " + (root.pausePlan.atLayer > 0
+            ? "Next print pauses at layer " + root.pausePlan.atLayer
+            : "Next print pauses after its first layer")
+          color: root.fg
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          font.bold: true
+          wrapMode: Text.Wrap
+
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.toolsOpen = true
+          }
         }
 
         // ---------- Progress bar ----------
@@ -1706,8 +1731,8 @@ Panel {
           PanelSeparator { foreground: root.fg }
 
           PanelSectionHeader {
-            visible: root.canPauseAtLayer
-            text: "PAUSE"
+            visible: root.pauseMacros
+            text: root.printing ? "PAUSE" : "PAUSE THE NEXT PRINT"
             foreground: root.fg
             fontFamily: root.fontFamily
           }
@@ -1721,9 +1746,11 @@ Panel {
             NumberField {
               id: layerField
               anchors.verticalCenter: parent.verticalCenter
-              from: Math.min(root.currentLayer + 1, root.totalLayer)
-              to: Math.max(1, root.totalLayer)
-              value: root.pausePlan.atLayer > 0 ? root.pausePlan.atLayer : Math.min(root.currentLayer + 1, root.totalLayer)
+              // Idle: the next print's layer count is unknown.
+              from: root.printing ? Math.min(root.currentLayer + 1, root.totalLayer) : 1
+              to: root.printing ? Math.max(1, root.totalLayer) : 9999
+              value: root.pausePlan.atLayer > 0 ? root.pausePlan.atLayer
+                : root.printing ? Math.min(root.currentLayer + 1, root.totalLayer) : 1
               foreground: root.fg
               fontFamily: root.fontFamily
               fontSize: Style.font.bodySmall
@@ -1750,7 +1777,7 @@ Panel {
           }
 
           Button {
-            visible: root.canPauseAtLayer
+            visible: root.canPauseNextLayer
             width: parent.width
             iconText: Model.ICONS.pause
             text: root.pausePlan.nextLayer ? "Pausing after this layer · undo" : "Pause after this layer"
@@ -1760,6 +1787,20 @@ Panel {
             fontFamily: root.fontFamily
             bordered: true
             onClicked: root.sendGcode(Model.pauseNextLayerCommand(!root.pausePlan.nextLayer))
+          }
+
+          ToolsNote {
+            visible: root.pauseMacros && root.printing && root.totalLayer === 0
+            text: "This print doesn't report layers, so it can't pause at one."
+          }
+          ToolsNote {
+            visible: !root.pauseMacros && !root.excludeSupported
+            text: "This printer has neither the layer-pause macros (SET_PAUSE_AT_LAYER) nor [exclude_object]."
+          }
+          ToolsNote {
+            visible: root.excludeSupported && !root.canSkip
+            text: root.printing ? "Only one object on this plate: nothing to skip."
+              : "Skipping a failed object is available during a print with several objects."
           }
 
           PanelSectionHeader {
@@ -2158,6 +2199,16 @@ Panel {
       font.pixelSize: Style.font.body
       font.bold: true
     }
+  }
+
+  component ToolsNote: Text {
+    width: parent.width
+    textFormat: Text.PlainText
+    color: root.fg
+    opacity: 0.6
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    wrapMode: Text.Wrap
   }
 
   component ActionButton: Button {

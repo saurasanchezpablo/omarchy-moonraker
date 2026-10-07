@@ -113,6 +113,7 @@ Requirements: `grim`, `jq`, `python-pillow`, and a horizontal bar at the top.
 - [ ] Right click cycles the styles and survives `omarchy restart shell`
 - [ ] Middle click opens the web UI
 - [ ] Tools → pause at a layer two layers ahead: the print pauses there, and "Pauses at" disappears afterwards
+- [ ] Idle: Tools → pause the next print at layer 3; the note shows under the title, and the next print pauses at layer 3
 - [ ] Tools on a multi-object plate: skipping an object needs a second click, then it shows as skipped and the printer leaves it out
 - [ ] With Spoolman: the spool line shows the active spool; picking another one switches it in Mainsail too
 - [ ] The bulb on the camera switches the chamber light and shows its state

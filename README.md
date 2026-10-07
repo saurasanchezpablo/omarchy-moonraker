@@ -43,10 +43,11 @@ RatRig, Creality K-series with Klipper, and others.
   Click it to pick another spool, so Moonraker tracks usage on the right one.
   Shown only when Moonraker has Spoolman set up (AFC printers show spools in the lanes)
 - **Controls**: pause, resume, and cancel (cancel asks you to confirm)
-- **Print tools** (the Tools button while printing, or `t`):
+- **Print tools** (the Tools button, or `t`):
   - pause at a chosen layer or after the current one, e.g. to drop in magnets
     or nuts (needs the standard Mainsail/Fluidd pause macros and a slicer that
-    reports layers)
+    reports layers). Between prints, set the layer for the next print; a
+    pending pause is shown under the title so it can't surprise you
   - skip one object of a multi-part plate when it fails, and keep printing the
     rest (needs `[exclude_object]` and a slicer that labels objects)
 - **Desktop notifications** when a print finishes, pauses (e.g. filament
@@ -261,7 +262,7 @@ The real output is a single line.
 | No thumbnail | The slicer didn't embed one, or Moonraker didn't extract it. |
 | No filament section | The printer has no [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) object. Happy Hare / ERCF and other changers aren't supported yet. |
 | Lane weight missing | AFC doesn't know it: set the spool weight in AFC or Spoolman. |
-| No Tools button | Nothing applies to this print: it has a single object (or the slicer didn't label objects for `[exclude_object]`), and the printer lacks the `SET_PAUSE_AT_LAYER`/`SET_PAUSE_NEXT_LAYER` macros (they come with Mainsail's and Fluidd's configs), or the slicer doesn't call `SET_PRINT_STATS_INFO` with layer numbers. |
+| Tools only shows notes | The printer lacks the `SET_PAUSE_AT_LAYER`/`SET_PAUSE_NEXT_LAYER` macros (they come with Mainsail's and Fluidd's configs) and `[exclude_object]`, or the running print doesn't report layers (`SET_PRINT_STATS_INFO`) or has a single object. |
 | No spool line | Moonraker has no `[spoolman]` section, or the printer has an AFC changer (its lanes show the spools). *Spoolman not connected* means Moonraker can't reach the Spoolman server. |
 | No camera | No enabled webcam is set up in Mainsail/Fluidd, or its service only streams (WebRTC, HLS) and has no snapshot URL. |
 | *HTTP 302 → …* under the camera | The snapshot URL redirects to another host. The widget only follows redirects that stay on the printer's host, so set the webcam's snapshot URL to the final address. |
