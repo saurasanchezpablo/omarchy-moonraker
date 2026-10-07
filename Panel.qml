@@ -115,6 +115,9 @@ Panel {
   // ---------- UI state ----------
   property bool settingsOpen: false
   property bool toolsOpen: false
+  // The layer chosen in Tools. Set when Tools opens, then only by the user,
+  // so a new layer starting doesn't overwrite what they picked.
+  property int layerChoice: 1
   property bool cancelArmed: false
   property bool actionBusy: false
   property int generation: 0
@@ -857,7 +860,21 @@ Panel {
     Quickshell.execDetached(["bash", "-lc", "exec \"$@\"", "bash", "xdg-open", root.baseUrl])
   }
 
-  onToolsOpenChanged: if (toolsOpen && spoolmanConnected) loadSpools()
+  onToolsOpenChanged: {
+    if (!toolsOpen) return
+    layerChoice = pausePlan.atLayer > 0 ? pausePlan.atLayer
+      : printing ? Math.max(1, Math.min(currentLayer + 1, totalLayer)) : 1
+    if (spoolmanConnected) loadSpools()
+  }
+
+  // What the layer field shows right now, typed but not yet committed
+  // included: the kit's Button doesn't take focus, so a click wouldn't
+  // commit the SpinBox's text first.
+  function chosenLayer() {
+    var typed = parseInt(String(layerField.field.contentItem.text || ""), 10)
+    var n = isNaN(typed) ? layerField.field.value : typed
+    return Math.max(layerField.from, Math.min(layerField.to, n))
+  }
   onBaseUrlChanged: reset()
   onApiKeyChanged: reset()
   onWebcamKeyChanged: {
@@ -1692,8 +1709,8 @@ Panel {
               // Idle: the next print's layer count is unknown.
               from: root.printing ? Math.min(root.currentLayer + 1, root.totalLayer) : 1
               to: root.printing ? Math.max(1, root.totalLayer) : 9999
-              value: root.pausePlan.atLayer > 0 ? root.pausePlan.atLayer
-                : root.printing ? Math.min(root.currentLayer + 1, root.totalLayer) : 1
+              value: root.layerChoice
+              onModified: function(v) { root.layerChoice = v }
               foreground: root.fg
               fontFamily: root.fontFamily
               fontSize: Style.font.bodySmall
@@ -1704,7 +1721,7 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
               width: parent.width - layerField.width - parent.spacing
               iconText: Model.ICONS.layers
-              text: root.pausePlan.atLayer > 0 && root.pausePlan.atLayer === layerField.field.value
+              text: root.pausePlan.atLayer > 0 && root.pausePlan.atLayer === root.layerChoice
                 ? "Clear layer " + root.pausePlan.atLayer : "Pause at this layer"
               active: root.pausePlan.atLayer > 0
               fontSize: Style.font.bodySmall
@@ -1712,7 +1729,8 @@ Panel {
               fontFamily: root.fontFamily
               bordered: true
               onClicked: {
-                var n = layerField.field.value
+                var n = root.chosenLayer()
+                root.layerChoice = n
                 root.sendGcode(Model.pauseAtLayerCommand(root.pausePlan.atLayer === n ? 0 : n))
                 keyCatcher.forceActiveFocus()
               }
