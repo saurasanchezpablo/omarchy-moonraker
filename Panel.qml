@@ -82,6 +82,10 @@ Panel {
   property var excludeObjects: []
   property string excludeFor: ""
   property var excludedObjects: []
+  // The object list arrived for this file (possibly empty), and when an empty
+  // or failed fetch may be retried (EXCLUDE_OBJECT_DEFINE runs after start).
+  property bool excludeChecked: false
+  property real excludeRetryAt: 0
   property string currentObject: ""
   property string skipArmed: ""
   // Spoolman through Moonraker: unknown until the popup asks, then whether
@@ -402,8 +406,17 @@ Panel {
       Qt.callLater(poll)
     }
     klippyMessage = klippyState === "ready" ? "" : String(wh.state_message || "")
+    var wasState = printState
     printState = String(ps.state || "")
     filename = String(ps.filename || "")
+    // A job starting: per-file caches may hold a previous upload of the same
+    // name (re-sliced and printed again), and its notices haven't been sent.
+    if (wasState !== "" && !Model.isActiveState(wasState) && printState === "printing") {
+      metaFor = ""
+      excludeFor = ""
+      excludeRetryAt = 0
+      soonSentFor = ""
+    }
     statusMessage = String(ps.message || (status.display_status && status.display_status.message) || "")
     printDuration = Number(ps.print_duration) || 0
     totalDuration = Number(ps.total_duration) || 0
@@ -439,7 +452,8 @@ Panel {
       excludedObjects = Model.toArray(status.exclude_object.excluded_objects) || []
       currentObject = String(status.exclude_object.current_object || "")
     }
-    if (excludeSupported && Model.isActiveState(printState) && excludeFor !== filename) loadExcludeObjects()
+    if (excludeSupported && Model.isActiveState(printState) && excludeFor !== filename
+        && Date.now() >= excludeRetryAt) loadExcludeObjects()
 
     var prevAfc = afc
     afc = Model.afcState(status, afcLaneObjects)
@@ -691,6 +705,9 @@ Panel {
     excludeObjects = []
     excludeFor = ""
     excludedObjects = []
+    excludeChecked = false
+    excludeRetryAt = 0
+    soonSentFor = ""
     currentObject = ""
     spoolmanChecked = false
     spoolmanAvailable = false
@@ -738,14 +755,17 @@ Panel {
     var file = filename
     excludeFor = file
     excludeObjects = []
+    excludeChecked = false
     request("GET", "/printer/objects/query?exclude_object=objects", function(err, result) {
       if (root.excludeFor !== file) return
-      if (err) {
-        root.excludeFor = ""   // retried on the next status
-        return
-      }
-      var eo = result && result.status ? result.status.exclude_object : null
+      var eo = !err && result && result.status ? result.status.exclude_object : null
       root.excludeObjects = Model.excludeNames(eo ? eo.objects : [])
+      root.excludeChecked = !err
+      // Empty (objects not defined yet) or failed: ask again in 30 s.
+      if (root.excludeObjects.length === 0) {
+        root.excludeFor = ""
+        root.excludeRetryAt = Date.now() + 30000
+      }
     })
   }
 
@@ -1880,8 +1900,12 @@ Panel {
             text: "This printer has neither the layer-pause macros (SET_PAUSE_AT_LAYER) nor [exclude_object]."
           }
           ToolsNote {
-            visible: root.excludeSupported && root.printing && !root.canSkip
+            visible: root.excludeSupported && root.printing && root.excludeObjects.length === 1
             text: "Only one object on this plate: nothing to skip."
+          }
+          ToolsNote {
+            visible: root.excludeSupported && root.printing && root.excludeChecked && root.excludeObjects.length === 0
+            text: "This print has no labelled objects to skip (the slicer's \"Label objects\" option)."
           }
 
           PanelSectionHeader {

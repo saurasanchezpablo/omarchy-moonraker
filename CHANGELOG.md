@@ -36,6 +36,12 @@
   start-up showed as *Offline*. The printer's objects (light, chamber, AFC,
   macros) are probed again whenever Klipper becomes ready, and changing
   `chamberObject` or `lightObject` applies without a restart.
+- Fix: printing the same file name again (re-sliced and re-uploaded) kept the
+  old estimate, thumbnail, layer count, and object list, and never sent
+  "10 minutes left" a second time. Per-file data is refreshed when a job
+  starts. An object list fetched before the print defined its objects is
+  retried, and Tools says when a print has no labelled objects instead of
+  "only one object".
 
 ## 0.2.1 — 2026-10-07
 
