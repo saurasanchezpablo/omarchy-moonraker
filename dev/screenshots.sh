@@ -3,7 +3,11 @@
 # the bar chip and the popup for each one into docs/screenshots/.
 #
 #   ./dev/screenshots.sh
-#   UPSTREAM=http://192.168.1.50 UPSTREAM_KEY=xxxx FILE="part.gcode" ./dev/screenshots.sh
+#   UPSTREAM=http://192.168.1.50 FILE="part.gcode" ./dev/screenshots.sh
+#
+# If that printer needs an API key, the script asks for it (hidden) unless
+# UPSTREAM_KEY is already exported. The key reaches the mock only through its
+# environment, never its command line, where any local user could read it.
 #
 # By default the mock serves dev/assets/thumbnail.png. With UPSTREAM set it
 # proxies real file metadata and thumbnails instead. While capturing, the bar's
@@ -20,6 +24,14 @@ PORT=7125
 MOCK_KEY=demo-api-key-1234
 MOCK_URL="http://127.0.0.1:$PORT"
 FILE=${FILE:-calibration-cube.gcode}
+
+# Keep the real key out of argv and out of every other child's environment.
+upstream_key=${UPSTREAM_KEY:-}
+unset UPSTREAM_KEY
+if [[ -n ${UPSTREAM:-} && -z $upstream_key && -t 0 ]]; then
+  read -rsp "API key for $UPSTREAM (Enter for none): " upstream_key
+  echo
+fi
 
 mkdir -p "$OUT"
 rm -f "$OUT"/*.png
@@ -95,9 +107,10 @@ capture() {
 }
 
 mock_args=(--port "$PORT" --require-key "$MOCK_KEY" --file "$FILE")
-[[ -n ${UPSTREAM:-} ]] && mock_args+=(--upstream "$UPSTREAM" --api-key "${UPSTREAM_KEY:-}")
-./dev/mock_moonraker.py "${mock_args[@]}" &
+[[ -n ${UPSTREAM:-} ]] && mock_args+=(--upstream "$UPSTREAM")
+MOONRAKER_API_KEY=$upstream_key python3 dev/mock_moonraker.py "${mock_args[@]}" &
 MOCK_PID=$!
+upstream_key=
 
 # Leave only this widget in the right section. A layout edit from outside the
 # shell doesn't always bring third-party IPC targets back, so restart it.

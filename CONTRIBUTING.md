@@ -40,7 +40,9 @@ omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http
 ```
 
 - By default the fake job gets synthesized metadata and `dev/assets/thumbnail.png`.
-- `--upstream`/`--api-key`/`--file`: proxy file metadata and thumbnails to a real printer instead.
+- `--upstream`/`--file`: proxy file metadata, thumbnails, and the webcam to a real printer instead.
+  Its API key, if needed, goes in the environment: `read -rs MOONRAKER_API_KEY && export MOONRAKER_API_KEY`.
+  The proxy never follows redirects (they would carry the key to another host) and caps answers at 8 MB.
 - `--require-key`: reject requests without this key (tests the auth states).
 - `--spoolman`: simulate Moonraker's Spoolman integration with three spools (one multi-color); with `--afc`, lanes accept `SET_SPOOL_ID`.
 - `--afc`: simulate a 4-lane Elegoo Canvas (AFC). The `toolchange-unload`,
@@ -72,8 +74,14 @@ the shell's memory should stay flat (`ps -o rss= -p $(pgrep -f quickshell)`).
 ```bash
 ./dev/screenshots.sh
 # or with a real file's metadata and thumbnail:
-UPSTREAM=http://192.168.1.50 UPSTREAM_KEY=REAL_KEY FILE="file.gcode" ./dev/screenshots.sh
+UPSTREAM=http://192.168.1.50 FILE="file.gcode" ./dev/screenshots.sh
 ```
+
+If that printer needs an API key, the script asks for it without echoing it.
+Never put a real key on a command line (`--api-key`, `UPSTREAM_KEY=… ./…`):
+arguments are readable by every local user through the process list, and the
+line lands in your shell history. The mock takes the key only from
+`MOONRAKER_API_KEY` in its environment.
 
 The script:
 

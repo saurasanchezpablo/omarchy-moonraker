@@ -8,7 +8,14 @@ the webcam serves dev/assets/webcam.jpg; with --upstream all of these are
 proxied to a real printer instead.
 
   ./dev/mock_moonraker.py --scenario printing --file "benchy.gcode" \
-      --upstream http://192.168.1.50 --api-key XXXX
+      --upstream http://192.168.1.50
+
+The real printer's API key, when it needs one, comes from the
+MOONRAKER_API_KEY environment variable, never from the command line: other
+local users can read every process's arguments, but not its environment.
+Read it without leaving it in your shell history:
+
+  read -rs MOONRAKER_API_KEY && export MOONRAKER_API_KEY
 
   # switch scenario while running
   curl -X POST http://127.0.0.1:7125/mock/scenario/paused
@@ -18,6 +25,7 @@ With --require-key KEY every request without that X-Api-Key (or a one-shot
 token the mock issued) gets a 401, which reproduces an auth failure.
 """
 import argparse
+import hmac
 import json
 import os
 import secrets
@@ -72,6 +80,9 @@ ABUSE = {
 }
 
 args = None
+upstream_key = ""
+# Upstream answers are read whole before being relayed, so cap them.
+MAX_PROXY_BYTES = 8 * 1024 * 1024
 scenario = {"name": "printing"}
 # State changed by G-code sent through /printer/gcode/script.
 machine = {"spool_id": 3, "lane_spools": {"CANVAS_1": 3}, "light": 1.0, "pause_next": False, "pause_at": 0, "excluded": []}
@@ -143,7 +154,7 @@ class Handler(BaseHTTPRequestHandler):
     def authorized(self):
         if not args.require_key:
             return True
-        if self.headers.get("X-Api-Key") == args.require_key:
+        if hmac.compare_digest(self.headers.get("X-Api-Key", ""), args.require_key):
             return True
         query = self.path.split("?", 1)[1] if "?" in self.path else ""
         for part in query.split("&"):
@@ -199,11 +210,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = self.path.split("?token=")[0]
         req = urllib.request.Request(args.upstream + path)
-        if args.api_key:
-            req.add_header("X-Api-Key", args.api_key)
+        if upstream_key:
+            req.add_header("X-Api-Key", upstream_key)
         try:
-            with urllib.request.urlopen(req, timeout=5) as r:
-                body = r.read()
+            # No redirects: urllib would copy X-Api-Key to wherever they point.
+            with NO_REDIRECTS.open(req, timeout=5) as r:
+                body = r.read(MAX_PROXY_BYTES + 1)
+                if len(body) > MAX_PROXY_BYTES:
+                    self.send_error(502, "upstream response too large")
+                    return
                 self.send_response(r.status)
                 self.send_header("Content-Type", r.headers.get("Content-Type", "application/octet-stream"))
                 self.send_header("Content-Length", str(len(body)))
@@ -401,15 +416,25 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json("ok")
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None   # surfaces as an HTTPError, relayed as 502
+
+
+NO_REDIRECTS = urllib.request.build_opener(_NoRedirect)
+
+
 def main():
-    global args
+    global args, upstream_key
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=7125)
     ap.add_argument("--scenario", default="printing", choices=list(SCENARIOS))
     ap.add_argument("--file", default="benchy.gcode")
     ap.add_argument("--upstream", default="", help="real Moonraker to proxy metadata/thumbnails from")
-    ap.add_argument("--api-key", default="", help="API key for --upstream")
-    ap.add_argument("--require-key", default="", help="reject requests without this X-Api-Key")
+    # Kept only to refuse it: a key in argv is visible to every local user.
+    ap.add_argument("--api-key", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--require-key", default="",
+                    help="reject requests without this X-Api-Key (a made-up test key, never a real one)")
     ap.add_argument("--thumbnail", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "thumbnail.png"),
                     help="PNG served as the job thumbnail when there is no --upstream")
     ap.add_argument("--webcam", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "webcam.jpg"),
@@ -418,6 +443,18 @@ def main():
     ap.add_argument("--afc", action="store_true", help="simulate an AFC filament changer (4-lane Canvas)")
     ap.add_argument("--spoolman", action="store_true", help="simulate Moonraker's Spoolman integration")
     args = ap.parse_args()
+    if args.api_key is not None:
+        ap.error("--api-key is no longer accepted: it would show the key in the process list. "
+                 "Set MOONRAKER_API_KEY in the environment instead.")
+    if args.upstream:
+        parts = urllib.parse.urlsplit(args.upstream)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            ap.error("--upstream must be an http(s) URL")
+        if parts.username or parts.password:
+            ap.error("--upstream must not contain credentials; use MOONRAKER_API_KEY")
+        args.upstream = args.upstream.rstrip("/")
+    # Taken out of the environment so nothing started later inherits it.
+    upstream_key = os.environ.pop("MOONRAKER_API_KEY", "")
     scenario["name"] = args.scenario
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 

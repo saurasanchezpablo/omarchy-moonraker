@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 — 2026-10-08
+
+- Security (development tools): the screenshot script passed a real printer's
+  API key to the mock printer as `--api-key`, where every local user could read
+  it in the process list. The mock now takes the key only from
+  `MOONRAKER_API_KEY` in its environment and refuses `--api-key`;
+  `dev/screenshots.sh` asks for the key without echoing it and hands it to the
+  mock alone. The mock's proxy also stopped following redirects, which copied
+  the key to whatever host they pointed at, caps upstream answers at 8 MB, and
+  rejects upstream URLs with embedded credentials.
+
 ## 0.2.1 — 2026-10-07
 
 - The Tools button is always available, not only while printing. Between
