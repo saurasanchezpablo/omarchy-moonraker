@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-07
+
+First release of **Moonraker Printer Plus**, an extended fork of
+[Moonraker Printer](https://github.com/prodpixa/omarchy-moonraker) by prodpixa
+(versions 0.1.x below are theirs).
+
+- New plugin ID `io.github.saurasanchezpablo.moonraker-plus` and name, so it can
+  be listed and installed alongside the original. Settings don't carry over from
+  the original's ID. Runtime files moved to `$XDG_RUNTIME_DIR/omarchy-moonraker-plus/`.
 
 - New: desktop notifications when a print finishes, is cancelled, fails, pauses
   (e.g. filament runout), or has 10 minutes left, and when Klipper or the

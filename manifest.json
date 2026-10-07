@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.prodpixa.moonraker",
-  "name": "Moonraker Printer",
-  "version": "0.1.2",
-  "author": "prodpixa",
+  "id": "io.github.saurasanchezpablo.moonraker-plus",
+  "name": "Moonraker Printer Plus",
+  "version": "0.2.0",
+  "author": "saurasanchezpablo (based on Moonraker Printer by prodpixa)",
   "license": "MIT",
-  "description": "3D printer status for any Klipper/Moonraker printer: progress, time left, and temperatures in the bar with a detail panel, the printer's camera, and filament changer lanes.",
+  "description": "Klipper/Moonraker 3D printer in the bar: progress, time left, temperatures, live camera, AFC filament lanes and tool changes, notifications, print tools, and Spoolman. Extends prodpixa's Moonraker Printer.",
   "kinds": [
     "bar-widget"
   ],

@@ -4,10 +4,10 @@
 
 | File | Role |
 |------|------|
-| `manifest.json` | Omarchy plugin manifest: id `io.github.prodpixa.moonraker`, kind `bar-widget`, entry point `Panel.qml`, defaults, and the settings schema. |
+| `manifest.json` | Omarchy plugin manifest: id `io.github.saurasanchezpablo.moonraker-plus`, kind `bar-widget`, entry point `Panel.qml`, defaults, and the settings schema. |
 | `Panel.qml` | The widget: bar chip, popup, camera view, HTTP client, polling, settings persistence, and IPC. |
 | `Model.js` | Pure helpers with no QML state: URL normalization, state labels, ETA math, formatting, chamber detection, and bar text. |
-| `dev/install.sh` | Copies the plugin into `~/.config/omarchy/plugins/io.github.prodpixa.moonraker` and restarts the shell. |
+| `dev/install.sh` | Copies the plugin into `~/.config/omarchy/plugins/io.github.saurasanchezpablo.moonraker-plus` and restarts the shell. |
 | `dev/mock_moonraker.py` | Fake Moonraker with switchable scenarios, for development and screenshots. |
 | `dev/assets/thumbnail.png` | Thumbnail the mock serves for its fake job. |
 | `dev/assets/webcam.jpg` | Frame the mock serves as its webcam snapshot. |
@@ -23,7 +23,7 @@
   `run()`, `shell.updateEntryInline()`, …). Colors bind to it, so a theme change
   repaints the widget immediately.
 - `settings`: the widget's entry from `shell.json`.
-- `moduleName`: `io.github.prodpixa.moonraker`.
+- `moduleName`: `io.github.saurasanchezpablo.moonraker-plus`.
 
 The UI is built from the shell's own kit, `qs.Ui` (`WidgetButton`,
 `KeyboardPanel`, `PanelKeyCatcher`, `Button`, `ButtonGroup`, `TextField`,
@@ -64,14 +64,14 @@ until it crashes. curl closes the connection when a limit is hit.
 | First connect / after the URL or key changes | `GET /printer/objects/list`: finds the chamber sensor object |
 | Every poll | `GET /printer/objects/query?print_stats&virtual_sdcard&display_status&extruder&heater_bed&webhooks[&<chamber>][&AFC=…&<lane objects>=…]` |
 | When the file name changes | `GET /server/files/metadata?filename=…`: slicer estimate, layer count, thumbnails |
-| Popup open, when the job has a thumbnail | `GET /server/files/gcodes/<thumb>`, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/` and shown from there |
+| Popup open, when the job has a thumbnail | `GET /server/files/gcodes/<thumb>`, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker-plus/` and shown from there |
 | Pause / Resume / Cancel | `POST /printer/print/pause`, `/resume`, `/cancel` |
 | Popup open | `GET /server/webcams/list`: webcams configured in Mainsail/Fluidd |
 | A new print starts (with `[exclude_object]`) | `GET /printer/objects/query?exclude_object=objects`: object names, once per file |
 | Popup open, with `[spoolman]` | `GET /server/spoolman/status`, then the active spool via `POST /server/spoolman/proxy` (`GET /v1/spool/<id>`) |
 | Spool picker | `POST /server/spoolman/proxy` (`GET /v1/spool?allow_archived=false`), `POST /server/spoolman/spool_id` |
 | Light button | `POST /printer/gcode/script?script=SET_LED …` or `SET_PIN …` |
-| While the popup is open | `GET <snapshot_url>`, one frame at a time, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/camera-{0,1}` |
+| While the popup is open | `GET <snapshot_url>`, one frame at a time, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker-plus/camera-{0,1}` |
 
 
 ### Polling

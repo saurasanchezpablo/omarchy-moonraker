@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-ID=io.github.prodpixa.moonraker
+ID=io.github.saurasanchezpablo.moonraker-plus
 CFG="$HOME/.config/omarchy/shell.json"
 OUT=docs/screenshots
 PORT=7125

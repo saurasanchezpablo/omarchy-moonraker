@@ -12,8 +12,8 @@ import "Model.js" as Model
 // and untrusted networks.
 Panel {
   id: root
-  moduleName: "io.github.prodpixa.moonraker"
-  ipcTarget: "io.github.prodpixa.moonraker"
+  moduleName: "io.github.saurasanchezpablo.moonraker-plus"
+  ipcTarget: "io.github.saurasanchezpablo.moonraker-plus"
   // Own the IpcHandler so the target can expose refresh/cycleDisplay too.
   manageIpc: false
 
@@ -125,7 +125,7 @@ Panel {
   property string cameraFrame: ""
   property bool cameraFresh: false
   property string cameraError: ""
-  readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/omarchy-moonraker"
+  readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/omarchy-moonraker-plus"
 
   readonly property bool printing: online && Model.isActiveState(printState)
   readonly property real remaining: printing
@@ -880,7 +880,7 @@ Panel {
   }
 
   IpcHandler {
-    target: "io.github.prodpixa.moonraker"
+    target: "io.github.saurasanchezpablo.moonraker-plus"
 
     function open(): void { root.open() }
     function close(): void { root.close() }

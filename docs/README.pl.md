@@ -1,9 +1,16 @@
-# Moonraker Printer dla Omarchy (PL)
+# Moonraker Printer Plus dla Omarchy (PL)
 
 Widget do bara [Omarchy](https://omarchy.org), który pokazuje stan drukarki 3D
 z Klipperem i [Moonrakerem](https://github.com/Arksine/moonraker). Działa
-z każdą taką drukarką: Qidi (testowane na Q2), Voron, RatRig, Creality
-K-series z Klipperem i innymi.
+z każdą taką drukarką: Qidi (testowane na Q2), Elegoo Centauri Carbon z COSMOS
+i Canvas, Voron, RatRig, Creality K-series z Klipperem i innymi.
+
+> **Podziękowania.** To rozszerzony fork pluginu
+> [**Moonraker Printer**](https://github.com/prodpixa/omarchy-moonraker) autorstwa
+> [prodpixa](https://github.com/prodpixa), który stworzył ten widget. Jego praca
+> jest używana na licencji MIT, a jego informacja o prawach autorskich zostaje
+> w [LICENSE](../LICENSE). Ta wersja dodaje kamerę, tory zmieniacza filamentu
+> AFC, powiadomienia, narzędzia wydruku i Spoolman.
 
 <p align="center"><img src="screenshots/08-printing.png" width="400"></p>
 
@@ -50,8 +57,16 @@ K-series z Klipperem i innymi.
 ## Instalacja
 
 ```bash
-omarchy plugin add https://github.com/prodpixa/omarchy-moonraker.git --enable
+omarchy plugin add https://github.com/saurasanchezpablo/omarchy-moonraker.git --enable
 ```
+
+Wymagania: Omarchy z shellem Quattro, drukarka z Klipperem i Moonrakerem,
+`curl` i `notify-send` (oba są w Omarchy). Kamera, AFC, makra pauzy,
+`[exclude_object]` i Spoolman są opcjonalne. Bez uprawnień roota i bez zmian w systemie.
+
+Jeśli masz oryginalny Moonraker Printer, najpierw go usuń
+(`omarchy plugin remove io.github.prodpixa.moonraker`) i wpisz adres ponownie:
+oba pluginy mają osobne ustawienia.
 
 Potem kliknij ikonkę drukarki. Popup otworzy się na ustawieniach: wpisz adres
 (np. `http://192.168.1.50`), opcjonalnie API key, i kliknij **Save & connect**.
@@ -59,11 +74,11 @@ Potem kliknij ikonkę drukarki. Popup otworzy się na ustawieniach: wpisz adres
 ## Odinstalowanie
 
 ```bash
-omarchy plugin remove io.github.prodpixa.moonraker
+omarchy plugin remove io.github.saurasanchezpablo.moonraker-plus
 ```
 
 Usuwa widget z baru, jego ustawienia (razem z API key) z `shell.json` i folder
-pluginu. `omarchy plugin disable io.github.prodpixa.moonraker` też usuwa widget i ustawienia, ale zostawia folder.
+pluginu. `omarchy plugin disable io.github.saurasanchezpablo.moonraker-plus` też usuwa widget i ustawienia, ale zostawia folder.
 
 ## Obsługa
 
@@ -86,7 +101,7 @@ Zapisują się we wpisie widgetu w `~/.config/omarchy/shell.json`:
 | `temps` | temperatury w stylu `full`: `nozzle`, `bed`, `chamber` |
 | `pollInterval` | co ile sekund odświeżać (domyślnie 5; w trakcie druku i przy otwartym popupie co najwyżej 3 s) |
 | `compactWhenIdle` | gdy nic się nie drukuje, pokazuj tylko przygaszoną ikonkę (dalej klikalną); to przełącznik w popupie |
-| `hideWhenIdle` | całkowicie ukryj widget, dopóki nic się nie drukuje. Ustawienia są w popupie widgetu, więc ta opcja jest dostępna tylko w `shell.json` albo przez IPC. Żeby go przywrócić: `omarchy-shell io.github.prodpixa.moonraker configure '{"hideWhenIdle":false}'` |
+| `hideWhenIdle` | całkowicie ukryj widget, dopóki nic się nie drukuje. Ustawienia są w popupie widgetu, więc ta opcja jest dostępna tylko w `shell.json` albo przez IPC. Żeby go przywrócić: `omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"hideWhenIdle":false}'` |
 | `hideWhenOffline` | ukryj widget, gdy drukarka jest niedostępna |
 | `chamberObject` | obiekt Klippera z temperaturą komory; pusty oznacza automatyczne wykrywanie |
 | `showCamera` | pokazuj kamerę drukarki w popupie (domyślnie tak); przełącznik jest w ustawieniach, gdy drukarka ma kamerę |
@@ -101,11 +116,11 @@ Klucz API jest zapisany w `shell.json` otwartym tekstem, tak jak inne ustawienia
 ## Sterowanie ze skryptów
 
 ```bash
-omarchy-shell io.github.prodpixa.moonraker status          # stan w JSON (bez API key)
-omarchy-shell io.github.prodpixa.moonraker refresh
-omarchy-shell io.github.prodpixa.moonraker cycleDisplay
-omarchy-shell io.github.prodpixa.moonraker showSettings
-omarchy-shell io.github.prodpixa.moonraker configure '{"display":"full"}'
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus status          # stan w JSON (bez API key)
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus refresh
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus cycleDisplay
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus showSettings
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"display":"full"}'
 ```
 
 ## Dla deweloperów

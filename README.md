@@ -1,10 +1,26 @@
-# Moonraker Printer for Omarchy
+# Moonraker Printer Plus for Omarchy
 
 A bar widget for the [Omarchy](https://omarchy.org) shell that shows the status
 of any Klipper 3D printer running [Moonraker](https://github.com/Arksine/moonraker):
-Qidi (tested on a Q2), Voron, RatRig, Creality K-series with Klipper, and others.
+Qidi (tested on a Q2), Elegoo Centauri Carbon with COSMOS and the Canvas, Voron,
+RatRig, Creality K-series with Klipper, and others.
+
+> **Credits.** This is an extended fork of
+> [**Moonraker Printer**](https://github.com/prodpixa/omarchy-moonraker) by
+> [prodpixa](https://github.com/prodpixa), who created the widget: the bar chip,
+> popup, every printer state, the bounded curl transport, the mock printer, and
+> the screenshot tooling. Their work is used under the MIT license and their
+> copyright notice is kept in [LICENSE](LICENSE). If you only need print status,
+> the original is the simpler choice.
+>
+> **What this version adds:** live camera with a chamber light switch, AFC
+> filament changer lanes and tool changes (Elegoo Canvas, Box Turtle, …),
+> desktop notifications with a camera snapshot, print tools (pause at layer,
+> skip a failed object), and Spoolman. See [CHANGELOG.md](CHANGELOG.md).
 
 <p align="center">
+  <img src="docs/screenshots/15-camera-filament-change.png" width="400" alt="Popup during a filament change, with the camera and AFC lanes">
+  &nbsp;
   <img src="docs/screenshots/08-printing.png" width="400" alt="Popup while printing">
 </p>
 <p align="center">
@@ -45,19 +61,40 @@ Qidi (tested on a Q2), Voron, RatRig, Creality K-series with Klipper, and others
   shell, so the widget follows `omarchy theme set` like the built-in widgets
 - **Bounded and lightweight**: one short `curl` call per request (curl ships with every Arch install), capped at 1 MB and 10 seconds, so a misbehaving printer can't stall or bloat your shell
 
+## Requirements
+
+- Omarchy with the Quattro shell (plugins and bar widgets)
+- A printer running Klipper and [Moonraker](https://github.com/Arksine/moonraker), reachable over HTTP(S)
+- `curl` (all printer requests) and `notify-send` from `libnotify` (notifications);
+  both come with Omarchy
+- Optional, used when present on the printer:
+  - a webcam configured in Mainsail/Fluidd with a snapshot URL (camera, notification pictures)
+  - [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) (filament changer lanes)
+  - the standard Mainsail/Fluidd `SET_PAUSE_AT_LAYER` / `SET_PAUSE_NEXT_LAYER` macros (pause at layer)
+  - `[exclude_object]` with a slicer that labels objects (skip object)
+  - `[spoolman]` in Moonraker with a [Spoolman](https://github.com/Donkie/Spoolman) server (spool line)
+
+Nothing is installed system-wide and no root access is required: the plugin is a QML
+folder under `~/.config/omarchy/plugins/` plus its entry in `shell.json`.
+
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/prodpixa/omarchy-moonraker.git --enable
+omarchy plugin add https://github.com/saurasanchezpablo/omarchy-moonraker.git --enable
 ```
 
 Or manually:
 
 ```bash
-git clone https://github.com/prodpixa/omarchy-moonraker.git ~/.config/omarchy/plugins/io.github.prodpixa.moonraker
+git clone https://github.com/saurasanchezpablo/omarchy-moonraker.git ~/.config/omarchy/plugins/io.github.saurasanchezpablo.moonraker-plus
 omarchy-shell shell rescanPlugins
-omarchy plugin enable io.github.prodpixa.moonraker right
+omarchy plugin enable io.github.saurasanchezpablo.moonraker-plus right
 ```
+
+Coming from the original Moonraker Printer? Both can be installed side by side,
+but you only need one. Remove the original first (`omarchy plugin remove
+io.github.prodpixa.moonraker`), then enter the URL and API key again in this
+one's Settings: the two plugins keep separate settings.
 
 Then click the printer icon in the bar. The popup opens on the Settings form.
 Enter the Moonraker URL (and the API key if your printer needs one), then click
@@ -80,12 +117,12 @@ VPN or from another subnet. On the same LAN many printers work without one.
 ## Uninstall
 
 ```bash
-omarchy plugin remove io.github.prodpixa.moonraker
+omarchy plugin remove io.github.saurasanchezpablo.moonraker-plus
 ```
 
 This removes the widget from the bar, deletes its settings (including the API
 key) from `~/.config/omarchy/shell.json`, and deletes the plugin folder.
-`omarchy plugin disable io.github.prodpixa.moonraker` also removes the widget and its settings
+`omarchy plugin disable io.github.saurasanchezpablo.moonraker-plus` also removes the widget and its settings
 but keeps the folder.
 
 ## Using it
@@ -119,7 +156,7 @@ The Settings section in the popup writes these values to the widget's entry in
 
 ```json
 {
-  "id": "io.github.prodpixa.moonraker",
+  "id": "io.github.saurasanchezpablo.moonraker-plus",
   "url": "http://192.168.1.50",
   "apiKey": "",
   "display": "full",
@@ -146,7 +183,7 @@ The Settings section in the popup writes these values to the widget's entry in
 | `temps`           | `["nozzle","bed"]`  | Temperatures shown in `full` style: `nozzle`, `bed`, `chamber`. |
 | `pollInterval`    | `5`                 | Seconds between refreshes (2–120). Capped at 3 s while printing or while the popup is open. |
 | `compactWhenIdle` | `false`            | Show only a dimmed icon while nothing is printing. The widget stays clickable. This is the toggle in the popup. |
-| `hideWhenIdle`    | `false`             | Hide the widget completely until a print starts. Because the settings live in the widget's popup, this one is only available in `shell.json` or over IPC. To show the widget again: `omarchy-shell io.github.prodpixa.moonraker configure '{"hideWhenIdle":false}'`. |
+| `hideWhenIdle`    | `false`             | Hide the widget completely until a print starts. Because the settings live in the widget's popup, this one is only available in `shell.json` or over IPC. To show the widget again: `omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"hideWhenIdle":false}'`. |
 | `hideWhenOffline` | `false`             | Hide the widget while the printer can't be reached. |
 | `chamberObject`   | auto                | Klipper object for the chamber temperature, e.g. `temperature_sensor chamber`. Detected automatically when empty. |
 | `showCamera`      | `true`              | Show the printer's webcam in the popup. The toggle appears in Settings when the printer has a webcam. |
@@ -161,17 +198,17 @@ The API key is stored in plain text in `shell.json`, like every other Omarchy wi
 ## Scripting (IPC)
 
 ```bash
-omarchy-shell io.github.prodpixa.moonraker toggle          # open/close the popup
-omarchy-shell io.github.prodpixa.moonraker showSettings    # open the popup on the settings form
-omarchy-shell io.github.prodpixa.moonraker refresh         # poll now
-omarchy-shell io.github.prodpixa.moonraker cycleDisplay    # next bar style
-omarchy-shell io.github.prodpixa.moonraker toggleLight     # chamber light on/off
-omarchy-shell io.github.prodpixa.moonraker pauseAtLayer 120 # pause when layer 120 starts (0 clears)
-omarchy-shell io.github.prodpixa.moonraker skipObject NAME # skip one object of the running print
-omarchy-shell io.github.prodpixa.moonraker showTools       # open the popup on the print tools
-omarchy-shell io.github.prodpixa.moonraker setSpool 12     # make Spoolman spool 12 active ("none" clears)
-omarchy-shell io.github.prodpixa.moonraker status          # JSON snapshot (never includes the API key)
-omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","display":"full"}'
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus toggle          # open/close the popup
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus showSettings    # open the popup on the settings form
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus refresh         # poll now
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus cycleDisplay    # next bar style
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus toggleLight     # chamber light on/off
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus pauseAtLayer 120 # pause when layer 120 starts (0 clears)
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus skipObject NAME # skip one object of the running print
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus showTools       # open the popup on the print tools
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus setSpool 12     # make Spoolman spool 12 active ("none" clears)
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus status          # JSON snapshot (never includes the API key)
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http://printer","display":"full"}'
 ```
 
 `status` output:
@@ -238,4 +275,6 @@ The real output is a single line.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Originally created by
+[prodpixa](https://github.com/prodpixa/omarchy-moonraker); extended by
+[saurasanchezpablo](https://github.com/saurasanchezpablo).

@@ -8,6 +8,15 @@ these shots happens to be green.
 Each state shows the bar chip first, then the popup. The screenshots use a
 neutral `calibration-cube.gcode` job and the bundled mock thumbnail.
 
+## Camera and filament change
+
+A print on a 4-lane AFC changer (Elegoo Canvas) in the middle of change 3 of 12,
+loading T2: the change card with the Unload → Load → Resume stage, the live
+camera with the chamber light switch, and the lanes with the loading one
+pulsing.
+
+<img src="screenshots/15-camera-filament-change.png" width="400">
+
 ## 1. Setup and connection
 
 ### Not configured

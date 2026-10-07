@@ -9,7 +9,7 @@ Please include:
 
 - your printer and firmware (e.g. Qidi Q2, Voron 2.4 with Mainsail)
 - what the popup says, plus a screenshot if you can
-- the output of `omarchy-shell io.github.prodpixa.moonraker status` (it never contains your API key)
+- the output of `omarchy-shell io.github.saurasanchezpablo.moonraker-plus status` (it never contains your API key)
 - your Omarchy version (`omarchy version`)
 
 If your printer uses an unusual chamber sensor or reports progress
@@ -24,8 +24,8 @@ In short, `Panel.qml` is the widget, `Model.js` holds the pure logic, and
 ## Install your working copy
 
 ```bash
-./dev/install.sh     # copy to ~/.config/omarchy/plugins/io.github.prodpixa.moonraker, restart the shell
-omarchy plugin enable io.github.prodpixa.moonraker right   # first time only
+./dev/install.sh     # copy to ~/.config/omarchy/plugins/io.github.saurasanchezpablo.moonraker-plus, restart the shell
+omarchy plugin enable io.github.saurasanchezpablo.moonraker-plus right   # first time only
 omarchy plugin validate .                    # manifest check
 ```
 
@@ -36,7 +36,7 @@ state without waiting for a real print.
 
 ```bash
 ./dev/mock_moonraker.py --scenario printing --require-key demo-key
-omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://127.0.0.1:7125","apiKey":"demo-key"}'
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http://127.0.0.1:7125","apiKey":"demo-key"}'
 ```
 
 - By default the fake job gets synthesized metadata and `dev/assets/thumbnail.png`.
