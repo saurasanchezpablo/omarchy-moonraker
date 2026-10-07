@@ -30,6 +30,7 @@ Panel {
   readonly property string webcamName: String(setting("webcam", "")).trim()
   readonly property bool showFilament: setting("showFilament", true) !== false
   readonly property bool notifyEnabled: setting("notify", true) !== false
+  readonly property bool notifySnapshot: setting("notifySnapshot", true) !== false
   readonly property bool configured: baseUrl !== ""
 
   // Theme colors come from the bar so the widget follows `omarchy theme set`;
@@ -90,6 +91,7 @@ Panel {
   property var activeRequests: []
   property int thumbnailSerial: 0
   property int cameraSerial: 0
+  property int notifySerial: 0
   // Camera: the snapshot URL that last worked, the next candidate to try,
   // the newest frame on disk, and why the last frame failed.
   property string cameraUrl: ""
@@ -192,6 +194,7 @@ Panel {
     var serial = 0
     var outFile = ""
     if (file === "camera") serial = ++root.cameraSerial
+    else if (file === "notify") serial = ++root.notifySerial
     else if (file) serial = ++root.thumbnailSerial
     if (file) outFile = root.runtimeDir + "/" + file + "-" + (serial % 2)
     var proc = curlComponent.createObject(root, {
@@ -199,7 +202,7 @@ Panel {
         url: url,
         method: method,
         apiKey: Model.sameOrigin(url, root.baseUrl) ? root.apiKey : "",
-        maxBytes: file === "camera" ? Model.MAX_SNAPSHOT_BYTES : file ? Model.MAX_IMAGE_BYTES : Model.MAX_JSON_BYTES,
+        maxBytes: file === "thumbnail" ? Model.MAX_IMAGE_BYTES : file ? Model.MAX_SNAPSHOT_BYTES : Model.MAX_JSON_BYTES,
         output: outFile
       })
     })
@@ -386,8 +389,17 @@ Panel {
       var e = events[i]
       if (e.kind === "soon") soonSentFor = filename
       if (mine && (e.kind === "paused" || e.kind === "cancelled")) continue
-      notify(e)
+      if (notifyEnabled && notifySnapshot && e.kind !== "soon") notifyWithSnapshot(e)
+      else notify(e)
     }
+  }
+
+  // Attach what the camera sees right now; the text goes out regardless.
+  function notifyWithSnapshot(e) {
+    grabSnapshot(function(path) {
+      if (path !== "") e.image = path
+      root.notify(e)
+    })
   }
 
   // notify-send runs from an argument list (no shell), so printer-provided
@@ -395,7 +407,9 @@ Panel {
   function notify(e) {
     if (!notifyEnabled) return
     var args = ["notify-send", "--app-name=3D Printer", "--urgency=" + e.urgency,
-                "--icon=" + (e.image || "printer"), e.title, Model.escapeMarkup(e.body)]
+                "--icon=" + (e.image || "printer")]
+    if (e.image) args.push("--hint=string:image-path:" + e.image)
+    args.push(e.title, Model.escapeMarkup(e.body))
     var proc = notifyComponent.createObject(root, { command: args })
     proc.running = true
   }
@@ -435,14 +449,58 @@ Panel {
   // ---------- Camera ----------
   // Re-read on every popup open, so a webcam added in Mainsail/Fluidd shows up
   // without a shell restart. Printers without a webcams API get an empty list.
-  function loadWebcams() {
-    if (!configured || webcamsInflight) return
+  function loadWebcams(onDone) {
+    if (!configured || webcamsInflight) {
+      if (onDone) onDone()
+      return
+    }
     webcamsInflight = request("GET", "/server/webcams/list", function(err, result) {
       root.webcamsInflight = null
-      if (err && err.status === 0) return   // unreachable: retried on the next status
-      root.webcams = err ? [] : Model.webcamList(result)
-      root.webcamsLoaded = true
+      // Unreachable: retried on the next status.
+      if (!(err && err.status === 0)) {
+        root.webcams = err ? [] : Model.webcamList(result)
+        root.webcamsLoaded = true
+      }
+      if (onDone) onDone()
     })
+  }
+
+  // One still for a notification from the webcam the popup would show, even
+  // if the popup was never opened. done(path), or done("") without one.
+  function grabSnapshot(done) {
+    if (!webcamsLoaded) {
+      loadWebcams(function() {
+        if (root.webcamsLoaded) root.grabSnapshot(done)
+        else done("")
+      })
+      return
+    }
+    if (!webcam) {
+      done("")
+      return
+    }
+    var urls = cameraUrl !== "" ? [cameraUrl] : Model.snapshotCandidates(baseUrl, webcam.snapshot)
+    snapshotFrom(urls, 0, "", 0, done)
+  }
+
+  // Same rules as the live view: candidates in order, same-host redirects only.
+  function snapshotFrom(urls, i, url, hops, done) {
+    if (i >= urls.length) {
+      done("")
+      return
+    }
+    var target = url || urls[i]
+    request("GET", target, function(err, img) {
+      if (err && err.redirect && hops < 2 && Model.sameHost(err.redirect, target)) {
+        root.snapshotFrom(urls, i, err.redirect, hops + 1, done)
+        return
+      }
+      if (err || !/^image\//i.test(img.type)) {
+        root.snapshotFrom(urls, i + 1, "", 0, done)
+        return
+      }
+      done(img.file)
+    }, "notify")
   }
 
   // One snapshot at a time: the next is requested only after this one is on
@@ -668,7 +726,7 @@ Panel {
       var patch
       try { patch = JSON.parse(json) } catch (e) { return "invalid JSON" }
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "expected a JSON object"
-      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify"]
+      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot"]
       var clean = {}
       for (var k in patch) {
         if (allowed.indexOf(k) < 0) return "unknown setting: " + k

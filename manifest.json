@@ -31,7 +31,8 @@
       "showCamera": true,
       "webcam": "",
       "showFilament": true,
-      "notify": true
+      "notify": true,
+      "notifySnapshot": true
     },
     "schema": [
       {
@@ -129,6 +130,13 @@
         "type": "boolean",
         "label": "Notifications",
         "description": "Desktop notifications when a print finishes, pauses, fails, or has 10 minutes left, and when Klipper or the filament changer stops with an error.",
+        "defaultValue": true
+      },
+      {
+        "key": "notifySnapshot",
+        "type": "boolean",
+        "label": "Camera snapshot in notifications",
+        "description": "Attach a webcam picture to notifications, so you can see the finished part or the problem.",
         "defaultValue": true
       }
     ]

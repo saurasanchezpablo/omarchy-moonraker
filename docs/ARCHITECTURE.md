@@ -146,6 +146,12 @@ cancelled, failing, or pausing; Klipper leaving `ready` (but not a restart into
 job). The first status after start-up or a printer change never notifies.
 Pause and cancel clicked in the popup within the last 15 s stay quiet.
 
+With `notifySnapshot`, every notification except "minutes left" first grabs
+one still from the webcam (loading the webcam list if the popup was never
+opened) through the same candidates, redirect rules, and 4 MB cap as the live
+view, saved to `notify-{0,1}` under the runtime dir and passed as the icon and
+`image-path` hint. If that fails the notification goes out without it.
+
 Each notification is one `notify-send` process started from an argument list,
 never through a shell, and the body is markup-escaped, so file names and
 messages from the printer stay plain text.

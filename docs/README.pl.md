@@ -25,7 +25,8 @@ K-series z Klipperem i innymi.
   wyładowanie / ładowanie / wznowienie i „zmiana 3 z 12” przy wydrukach
   wielokolorowych. W trakcie zmiany chip w barze pokazuje docelowe narzędzie.
 - **Powiadomienia** na pulpicie: koniec wydruku, pauza (np. koniec filamentu),
-  błąd, „zostało 10 minut” oraz błędy Klippera i zmieniacza filamentu.
+  błąd, „zostało 10 minut” oraz błędy Klippera i zmieniacza filamentu, ze
+  zdjęciem z kamery, żeby od razu widzieć gotowy model albo problem.
 - **Sterowanie**: pauza, wznowienie i anulowanie. Anulowanie trzeba kliknąć drugi raz, żeby potwierdzić.
 - **Obsługa wszystkich stanów**:
   - brak konfiguracji, brak połączenia, brak lub zły API key,
@@ -82,6 +83,7 @@ Zapisują się we wpisie widgetu w `~/.config/omarchy/shell.json`:
 | `chamberObject` | obiekt Klippera z temperaturą komory; pusty oznacza automatyczne wykrywanie |
 | `showCamera` | pokazuj kamerę drukarki w popupie (domyślnie tak); przełącznik jest w ustawieniach, gdy drukarka ma kamerę |
 | `notify` | powiadomienia na pulpicie (przez `notify-send`), domyślnie włączone |
+| `notifySnapshot` | dołączaj do powiadomień zdjęcie z kamery (domyślnie tak) |
 | `showFilament` | pokazuj tory zmieniacza filamentu i zmiany narzędzia (domyślnie tak); działa tylko z [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) |
 | `webcam` | nazwa kamery z Mainsail/Fluidd; pusta oznacza pierwszą. Przy kilku kamerach kliknięcie obrazu przełącza na następną |
 
