@@ -42,6 +42,11 @@
   starts. An object list fetched before the print defined its objects is
   retried, and Tools says when a print has no labelled objects instead of
   "only one object".
+- Fix: any popup action (Resume, Skip, assigning a spool) silenced pause and
+  cancel notifications for 15 s, so a filament runout right after resuming
+  went unannounced. Only the pause or cancel you clicked is silenced now. A
+  notification waiting for its camera picture is no longer lost when the
+  printer changes.
 
 ## 0.2.1 — 2026-10-07
 

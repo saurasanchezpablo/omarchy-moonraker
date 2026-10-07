@@ -103,11 +103,13 @@ Panel {
   // Lane loaded when the current change started; AFC forgets it once unloaded.
   property string changeOrigin: ""
   // Notifications: the last status snapshot, whether this job already got its
-  // "minutes left" notice, and when the user last acted from the popup (their
-  // own pause/cancel shouldn't notify them).
+  // "minutes left" notice, and the event the user just caused from the popup
+  // or IPC ({ kind: "paused" | "cancelled", at }), which shouldn't notify them.
   property var lastSnapshot: null
   property string soonSentFor: ""
-  property real userActionAt: 0
+  property var expectedEvent: ({ kind: "", at: 0 })
+  // A notification waiting for its snapshot, sent as text if the wait is cut short.
+  property var pendingNotice: null
   // Per-kind time of the last notification, and whether a snapshot for one
   // is being fetched (one at a time, so pictures can't swap).
   property var notifiedAt: ({})
@@ -480,11 +482,13 @@ Panel {
     }
     var events = Model.notifications(lastSnapshot, snap, soonSentFor === filename)
     lastSnapshot = snap
-    var mine = Date.now() - userActionAt < 15000
     for (var i = 0; i < events.length; i++) {
       var e = events[i]
       if (e.kind === "soon") soonSentFor = filename
-      if (mine && (e.kind === "paused" || e.kind === "cancelled")) continue
+      if (e.kind === expectedEvent.kind && Date.now() - expectedEvent.at < 15000) {
+        expectedEvent = { kind: "", at: 0 }
+        continue
+      }
       // A printer flapping between states gets one notice per kind per 30 s.
       var now = Date.now()
       if (now - (notifiedAt[e.kind] || 0) < 30000) continue
@@ -497,7 +501,10 @@ Panel {
   // Attach what the camera sees right now; the text goes out regardless.
   function notifyWithSnapshot(e) {
     snapshotBusy = true
+    pendingNotice = e
     grabSnapshot(function(path) {
+      if (root.pendingNotice !== e) return
+      root.pendingNotice = null
       root.snapshotBusy = false
       if (path !== "") e.image = path
       root.notify(e)
@@ -697,6 +704,9 @@ Panel {
     afc = null
     changeOrigin = ""
     lastSnapshot = null
+    // Snapshot callbacks die with the old printer: don't lose the notice.
+    if (pendingNotice) notify(pendingNotice)
+    pendingNotice = null
     snapshotBusy = false
     lightOn = false
     pauseMacros = false
@@ -728,7 +738,8 @@ Panel {
   function printAction(action) {
     if (actionBusy) return
     actionBusy = true
-    userActionAt = Date.now()
+    var expected = action === "pause" ? "paused" : action === "cancel" ? "cancelled" : ""
+    if (expected !== "") expectedEvent = { kind: expected, at: Date.now() }
     request("POST", "/printer/print/" + action, function(err) {
       root.actionBusy = false
       if (err) root.lastError = err.message
@@ -827,7 +838,6 @@ Panel {
     var lane = spoolPickerLane
     spoolPickerOpen = false
     if (lane !== "") {
-      userActionAt = Date.now()
       sendGcode(Model.afcSpoolCommand(lane, id))
     } else {
       setSpool(id)
@@ -863,7 +873,6 @@ Panel {
       return
     }
     skipArmed = ""
-    userActionAt = Date.now()
     sendGcode(Model.excludeCommand(name))
   }
 
@@ -1013,7 +1022,6 @@ Panel {
     function skipObject(name: string): string {
       var cmd = Model.excludeCommand(name)
       if (cmd === "" || root.excludeObjects.indexOf(name) < 0) return "unknown object"
-      root.userActionAt = Date.now()
       root.sendGcode(cmd)
       return "ok"
     }
@@ -1036,7 +1044,6 @@ Panel {
       var n = id === "none" ? -1 : parseInt(id, 10)
       var cmd = isNaN(n) ? "" : Model.afcSpoolCommand(lane, n)
       if (cmd === "" || !root.afc || !Model.afcLane(root.afc, lane)) return "expected a lane name and a spool id or none"
-      root.userActionAt = Date.now()
       root.sendGcode(cmd)
       return "ok"
     }
