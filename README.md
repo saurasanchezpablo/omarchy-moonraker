@@ -15,6 +15,8 @@ Qidi (tested on a Q2), Voron, RatRig, Creality K-series with Klipper, and others
 
 - **Bar chip** in three styles: icon only, progress + time left, or progress + temperatures
 - **Detail popup**: thumbnail, elapsed/remaining time, finish time, layer, filament, live temperatures
+- **Printer camera** in the popup, from the webcam set up in Mainsail/Fluidd. It
+  refreshes about once a second and only while the popup is open, so nothing runs in the background
 - **Controls**: pause, resume, and cancel (cancel asks you to confirm)
 - **Every printer state is covered**: setup, unreachable, bad API key, Klipper
   starting/shutdown/disconnected, idle, heating, printing, paused, complete,
@@ -107,7 +109,9 @@ The Settings section in the popup writes these values to the widget's entry in
   "compactWhenIdle": false,
   "hideWhenIdle": false,
   "hideWhenOffline": false,
-  "chamberObject": ""
+  "chamberObject": "",
+  "showCamera": true,
+  "webcam": ""
 }
 ```
 
@@ -122,6 +126,8 @@ The Settings section in the popup writes these values to the widget's entry in
 | `hideWhenIdle`    | `false`             | Hide the widget completely until a print starts. Because the settings live in the widget's popup, this one is only available in `shell.json` or over IPC. To show the widget again: `omarchy-shell io.github.prodpixa.moonraker configure '{"hideWhenIdle":false}'`. |
 | `hideWhenOffline` | `false`             | Hide the widget while the printer can't be reached. |
 | `chamberObject`   | auto                | Klipper object for the chamber temperature, e.g. `temperature_sensor chamber`. Detected automatically when empty. |
+| `showCamera`      | `true`              | Show the printer's webcam in the popup. The toggle appears in Settings when the printer has a webcam. |
+| `webcam`          | first one           | Name of the webcam to show, as set in Mainsail/Fluidd. With several webcams, click the picture to switch. |
 
 The API key is stored in plain text in `shell.json`, like every other Omarchy widget setting.
 
@@ -146,9 +152,17 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","d
     "nozzle": {"key": "nozzle", "temperature": 219.6, "target": 220},
     "bed": {"key": "bed", "temperature": 60.1, "target": 60}
   },
-  "error": ""
+  "error": "",
+  "camera": {
+    "enabled": true, "webcams": ["webcam"], "active": "webcam",
+    "snapshot": "/webcam/?action=snapshot", "url": "http://192.168.1.50:8080/?action=snapshot",
+    "streaming": true, "error": ""
+  }
 }
 ```
+
+`camera.url` is the snapshot address that answered, after resolving relative
+URLs and same-host redirects. `streaming` is true only while the popup is open.
 
 The real output is a single line.
 
@@ -163,6 +177,8 @@ The real output is a single line.
 | *Klipper disconnected / shutdown / starting up* | Moonraker is fine, Klipper isn't. Check the printer's screen or web UI. The message from Klipper is shown under the title. |
 | No chamber temperature | Set `chamberObject` to the right Klipper object (see `/printer/objects/list`). |
 | No thumbnail | The slicer didn't embed one, or Moonraker didn't extract it. |
+| No camera | No enabled webcam is set up in Mainsail/Fluidd, or its service only streams (WebRTC, HLS) and has no snapshot URL. |
+| *HTTP 302 → …* under the camera | The snapshot URL redirects to another host. The widget only follows redirects that stay on the printer's host, so set the webcam's snapshot URL to the final address. |
 
 ## Documentation
 

@@ -7,8 +7,9 @@ import "Model.js" as Model
 
 // Moonraker printer widget: a bar chip showing print progress / time left /
 // temperatures, plus a popup with job details, controls, and settings.
-// Talks to Moonraker's HTTP API directly (no curl dependency) and sends the
-// optional API key as X-Api-Key, so it works over VPNs and untrusted networks.
+// Talks to Moonraker's HTTP API through short, size- and time-limited curl
+// calls and sends the optional API key as X-Api-Key, so it works over VPNs
+// and untrusted networks.
 Panel {
   id: root
   moduleName: "io.github.prodpixa.moonraker"
@@ -25,6 +26,8 @@ Panel {
   readonly property bool hideWhenIdle: setting("hideWhenIdle", false) === true
   readonly property bool compactWhenIdle: setting("compactWhenIdle", false) === true
   readonly property bool hideWhenOffline: setting("hideWhenOffline", false) === true
+  readonly property bool showCamera: setting("showCamera", true) !== false
+  readonly property string webcamName: String(setting("webcam", "")).trim()
   readonly property bool configured: baseUrl !== ""
 
   // Theme colors come from the bar so the widget follows `omarchy theme set`;
@@ -56,6 +59,10 @@ Panel {
   property bool objectsProbed: false
   property string thumbnailSource: ""
   property string thumbnailFor: ""
+  // Webcams from /server/webcams/list (Model.webcamList entries).
+  property var webcams: []
+  property bool webcamsLoaded: false
+  property var webcamsInflight: null
 
   // ---------- UI state ----------
   property bool settingsOpen: false
@@ -66,6 +73,15 @@ Panel {
   // Running curl processes, so a reset or teardown can stop all of them.
   property var activeRequests: []
   property int thumbnailSerial: 0
+  property int cameraSerial: 0
+  // Camera: the snapshot URL that last worked, the next candidate to try,
+  // the newest frame on disk, and why the last frame failed.
+  property string cameraUrl: ""
+  property int cameraAttempt: 0
+  property var cameraInflight: null
+  property string cameraFrame: ""
+  property bool cameraFresh: false
+  property string cameraError: ""
   readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/omarchy-moonraker"
 
   readonly property bool printing: online && Model.isActiveState(printState)
@@ -75,6 +91,12 @@ Panel {
   readonly property bool finished: online && filename !== ""
     && (printState === "complete" || printState === "cancelled" || printState === "error")
   readonly property bool klippyReady: klippyState === "" || klippyState === "ready"
+
+  readonly property int webcamIndex: Model.pickWebcam(webcams, webcamName)
+  readonly property var webcam: webcamIndex >= 0 ? webcams[webcamIndex] : null
+  readonly property string webcamKey: webcam ? webcam.name + "\n" + webcam.snapshot : ""
+  // Frames are only fetched while the popup is open: nothing runs in the bar.
+  readonly property bool cameraActive: opened && showCamera && online && webcam !== null
   readonly property bool problem: configured && (authFailed
     || (everConnected && (!online || !klippyReady || printState === "error")))
 
@@ -137,18 +159,25 @@ Panel {
   // HTTP goes through curl rather than QML's XMLHttpRequest: aborting an XHR
   // only detaches it from JavaScript while the transfer keeps filling memory,
   // whereas curl stops the transfer at --max-filesize / --max-time. The URL
-  // and API key reach curl on stdin, never in argv. `binary` requests save the
-  // body to a file under $XDG_RUNTIME_DIR and return { file, type }.
-  function request(method, path, onDone, binary) {
+  // and API key reach curl on stdin, never in argv. `path` is relative to the
+  // printer URL or absolute (webcams); the key only goes to the printer's own
+  // origin. `file` requests ("thumbnail", "camera") save the body to one of two
+  // alternating files under $XDG_RUNTIME_DIR and return { file, type, serial }.
+  function request(method, path, onDone, file) {
     var gen = root.generation
-    var host = Model.hostLabel(root.baseUrl)
-    var outFile = binary ? root.runtimeDir + "/thumbnail-" + (++root.thumbnailSerial % 2) : ""
+    var url = /^https?:\/\//i.test(path) ? path : root.baseUrl + path
+    var host = Model.hostLabel(url)
+    var serial = 0
+    var outFile = ""
+    if (file === "camera") serial = ++root.cameraSerial
+    else if (file) serial = ++root.thumbnailSerial
+    if (file) outFile = root.runtimeDir + "/" + file + "-" + (serial % 2)
     var proc = curlComponent.createObject(root, {
       config: Model.curlConfig({
-        url: root.baseUrl + path,
+        url: url,
         method: method,
-        apiKey: root.apiKey,
-        maxBytes: binary ? Model.MAX_IMAGE_BYTES : Model.MAX_JSON_BYTES,
+        apiKey: Model.sameOrigin(url, root.baseUrl) ? root.apiKey : "",
+        maxBytes: file === "camera" ? Model.MAX_SNAPSHOT_BYTES : file ? Model.MAX_IMAGE_BYTES : Model.MAX_JSON_BYTES,
         output: outFile
       })
     })
@@ -162,9 +191,10 @@ Panel {
       }
       var res = Model.parseCurlOutput(text)
       var ok = res.status >= 200 && res.status < 300
-      if (binary) {
-        if (ok) onDone(null, { file: outFile, type: res.contentType })
-        else onDone({ status: res.status, message: "HTTP " + res.status }, null)
+      if (file) {
+        if (ok) onDone(null, { file: outFile, type: res.contentType, serial: serial })
+        else onDone({ status: res.status, redirect: res.redirect, message: "HTTP " + res.status
+          + (res.redirect ? " → " + Model.redactUrl(res.redirect) : "") }, null)
         return
       }
       var body = null
@@ -194,10 +224,19 @@ Panel {
     if (i >= 0) activeRequests.splice(i, 1)
   }
 
+  function stopRequest(proc) {
+    if (!proc) return
+    untrackRequest(proc)
+    proc.callback = null
+    proc.running = false
+  }
+
   function abortAll() {
     var list = activeRequests.slice()
     activeRequests = []
     inflight = null
+    webcamsInflight = null
+    cameraInflight = null
     for (var i = 0; i < list.length; i++) {
       list[i].callback = null
       list[i].running = false
@@ -283,6 +322,7 @@ Panel {
 
     if (filename !== metaFor) loadMetadata()
     if (opened) loadThumbnail()
+    if (opened && !webcamsLoaded) loadWebcams()
   }
 
   function loadMetadata() {
@@ -313,8 +353,90 @@ Panel {
         if (!err.tooLarge) root.thumbnailFor = ""
         return
       }
-      root.thumbnailSource = "file://" + img.file + "?" + root.thumbnailSerial
-    }, true)
+      root.thumbnailSource = "file://" + img.file + "?" + img.serial
+    }, "thumbnail")
+  }
+
+  // ---------- Camera ----------
+  // Re-read on every popup open, so a webcam added in Mainsail/Fluidd shows up
+  // without a shell restart. Printers without a webcams API get an empty list.
+  function loadWebcams() {
+    if (!configured || webcamsInflight) return
+    webcamsInflight = request("GET", "/server/webcams/list", function(err, result) {
+      root.webcamsInflight = null
+      if (err && err.status === 0) return   // unreachable: retried on the next status
+      root.webcams = err ? [] : Model.webcamList(result)
+      root.webcamsLoaded = true
+    })
+  }
+
+  // One snapshot at a time: the next is requested only after this one is on
+  // screen (or failed), so a slow camera can never pile up requests.
+  function loadCameraFrame() {
+    if (!cameraActive || cameraInflight) return
+    var urls = Model.snapshotCandidates(baseUrl, webcam.snapshot)
+    if (urls.length === 0) {
+      cameraError = "This webcam has no usable snapshot URL"
+      return
+    }
+    fetchCameraFrame(cameraUrl !== "" ? cameraUrl : urls[cameraAttempt % urls.length], urls, webcamKey, 0)
+  }
+
+  function fetchCameraFrame(url, urls, key, hops) {
+    cameraInflight = request("GET", url, function(err, img) {
+      root.cameraInflight = null
+      if (root.webcamKey !== key) return
+      // nginx often redirects /webcam/ to the streamer's own port. Follow
+      // that, but only on the printer's host; the URL that answers is kept.
+      if (err && err.redirect && hops < 2 && Model.sameHost(err.redirect, url)) {
+        root.fetchCameraFrame(err.redirect, urls, key, hops + 1)
+        return
+      }
+      if (!err && !/^image\//i.test(img.type)) err = { message: "The webcam didn't send an image" }
+      if (err) {
+        root.cameraUrl = ""
+        root.cameraAttempt++
+        // Try the next candidate URL straight away; after a full round, wait.
+        if (root.cameraAttempt % urls.length !== 0) {
+          Qt.callLater(root.loadCameraFrame)
+          return
+        }
+        root.cameraFrameDone(false, err.message || "Camera unavailable")
+        return
+      }
+      root.cameraUrl = url
+      root.cameraFrame = "file://" + img.file + "?" + img.serial
+    }, "camera")
+  }
+
+  // Called by the camera view once a frame is decoded (or failed to decode).
+  function cameraFrameDone(ok, message) {
+    cameraError = ok ? "" : message
+    if (ok) cameraFresh = true
+    cameraTimer.interval = ok ? Model.CAMERA_FRAME_MS : Model.CAMERA_RETRY_MS
+    if (cameraActive) cameraTimer.restart()
+  }
+
+  function stopCamera() {
+    cameraTimer.stop()
+    stopRequest(cameraInflight)
+    cameraInflight = null
+    // Keep the last frame: it reappears dimmed on the next open until a new
+    // one arrives, instead of an empty box.
+    cameraFresh = false
+  }
+
+  function resetCamera() {
+    stopCamera()
+    cameraUrl = ""
+    cameraAttempt = 0
+    cameraError = ""
+    cameraFrame = ""
+  }
+
+  function cycleWebcam() {
+    if (webcams.length < 2) return
+    saveSettings({ webcam: webcams[(webcamIndex + 1) % webcams.length].name })
   }
 
   function reset() {
@@ -335,6 +457,9 @@ Panel {
     chamberObject = ""
     thumbnailSource = ""
     thumbnailFor = ""
+    webcams = []
+    webcamsLoaded = false
+    resetCamera()
     Qt.callLater(poll)
   }
 
@@ -365,6 +490,18 @@ Panel {
 
   onBaseUrlChanged: reset()
   onApiKeyChanged: reset()
+  onWebcamKeyChanged: {
+    resetCamera()
+    if (cameraActive) loadCameraFrame()
+  }
+  onCameraActiveChanged: {
+    if (cameraActive) {
+      cameraError = ""
+      loadCameraFrame()
+    } else {
+      stopCamera()
+    }
+  }
 
   onOpenedChanged: {
     if (opened) {
@@ -374,6 +511,7 @@ Panel {
       keyField.text = setting("apiKey", "")
       poll()
       loadThumbnail()
+      if (online) loadWebcams()
     }
   }
 
@@ -441,7 +579,7 @@ Panel {
       var patch
       try { patch = JSON.parse(json) } catch (e) { return "invalid JSON" }
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "expected a JSON object"
-      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject"]
+      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam"]
       var clean = {}
       for (var k in patch) {
         if (allowed.indexOf(k) < 0) return "unknown setting: " + k
@@ -459,7 +597,13 @@ Panel {
       return JSON.stringify({
         configured: root.configured, online: root.online, state: root.printState,
         auth: !root.authFailed, klippy: root.klippyState, file: root.filename, progress: root.progress,
-        remaining: root.remaining, temps: root.temps, error: root.lastError
+        remaining: root.remaining, temps: root.temps, error: root.lastError,
+        camera: {
+          enabled: root.showCamera, webcams: root.webcams.map(function(c) { return c.name }),
+          active: root.webcam ? root.webcam.name : "", snapshot: root.webcam ? Model.redactUrl(root.webcam.snapshot) : "",
+          url: Model.redactUrl(root.cameraUrl),
+          streaming: root.cameraActive, error: root.cameraError
+        }
       })
     }
   }
@@ -469,6 +613,11 @@ Panel {
     running: root.configured
     repeat: true
     onTriggered: root.poll()
+  }
+
+  Timer {
+    id: cameraTimer
+    onTriggered: root.loadCameraFrame()
   }
 
   Timer {
@@ -645,6 +794,91 @@ Panel {
               NumberAnimation { from: 1.0; to: 0.45; duration: 900; easing.type: Easing.InOutSine }
               NumberAnimation { from: 0.45; to: 1.0; duration: 900; easing.type: Easing.InOutSine }
             }
+          }
+        }
+
+        // ---------- Camera ----------
+        // Two images take turns: the next frame decodes in the hidden one and
+        // is swapped in when ready, so the picture never blanks between frames.
+        Rectangle {
+          id: cameraView
+          visible: root.showCamera && root.online && root.webcam !== null
+          width: parent.width
+          readonly property var cam: root.webcam
+          readonly property bool sideways: cam !== null && (cam.rotation === 90 || cam.rotation === 270)
+          readonly property var shown: front === 0 ? frameA : frameB
+          // Real frame proportions once one is decoded, else the webcam's setting.
+          readonly property real aspect: {
+            var w = shown.implicitWidth, h = shown.implicitHeight
+            var a = shown.status === Image.Ready && w > 0 && h > 0 ? w / h : (cam ? cam.aspect : 16 / 9)
+            return sideways ? 1 / a : a
+          }
+          property int front: 0
+          implicitHeight: Math.round(width / aspect)
+          radius: Style.cornerRadius
+          color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
+
+          Connections {
+            target: root
+            function onCameraFrameChanged() {
+              if (root.cameraFrame === "") {
+                frameA.source = ""
+                frameB.source = ""
+                cameraView.front = 0
+              } else {
+                (cameraView.front === 0 ? frameB : frameA).source = root.cameraFrame
+              }
+            }
+          }
+
+          CameraFrame { id: frameA; index: 0 }
+          CameraFrame { id: frameB; index: 1 }
+
+          Text {
+            anchors.centerIn: parent
+            width: parent.width - Style.space(24)
+            visible: cameraView.shown.status !== Image.Ready
+            textFormat: Text.PlainText
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            text: root.cameraError !== "" ? Model.ICONS.camera + "  " + root.cameraError
+              : Model.ICONS.camera + "  Connecting to camera…"
+            color: root.cameraError !== "" ? root.urgentColor : root.fg
+            opacity: root.cameraError !== "" ? 1 : 0.6
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
+          // Camera name and a stale-frame warning, over the picture.
+          Rectangle {
+            visible: caption.text !== "" && cameraView.shown.status === Image.Ready
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.margins: Style.space(8)
+            width: caption.implicitWidth + Style.space(12)
+            height: caption.implicitHeight + Style.space(6)
+            radius: Style.cornerRadius
+            color: Qt.rgba(0, 0, 0, 0.55)
+
+            Text {
+              id: caption
+              anchors.centerIn: parent
+              textFormat: Text.PlainText
+              text: root.cameraError !== "" ? Model.ICONS.alert + "  " + root.cameraError
+                : root.webcams.length > 1 ? Model.ICONS.camera + "  " + cameraView.cam.name
+                  + "  " + (root.webcamIndex + 1) + "/" + root.webcams.length
+                : ""
+              color: "white"
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            enabled: root.webcams.length > 1
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: root.cycleWebcam()
           }
         }
 
@@ -898,7 +1132,52 @@ Panel {
             titleSize: Style.font.bodySmall
             onClicked: root.saveSettings({ compactWhenIdle: !root.compactWhenIdle })
           }
+
+          Toggle {
+            visible: root.webcams.length > 0
+            width: parent.width
+            label: "Show camera"
+            description: "Live snapshots, only while this popup is open"
+            checked: root.showCamera
+            foreground: root.fg
+            fontFamily: root.fontFamily
+            titleSize: Style.font.bodySmall
+            onClicked: root.saveSettings({ showCamera: !root.showCamera })
+          }
         }
+      }
+    }
+  }
+
+  // One of the camera view's two alternating images. Decodes at display size
+  // (Qt's allocation limit also rejects absurd dimensions in a small file).
+  component CameraFrame: Image {
+    required property int index
+    readonly property var cam: cameraView.cam
+    anchors.centerIn: parent
+    width: cameraView.sideways ? cameraView.height : cameraView.width
+    height: cameraView.sideways ? cameraView.width : cameraView.height
+    visible: cameraView.front === index && status === Image.Ready
+    opacity: root.cameraFresh ? 1 : 0.4
+    rotation: cam ? cam.rotation : 0
+    transform: Scale {
+      origin.x: width / 2
+      origin.y: height / 2
+      xScale: cam && cam.flipH ? -1 : 1
+      yScale: cam && cam.flipV ? -1 : 1
+    }
+    sourceSize.width: Style.space(800)
+    cache: false
+    asynchronous: true
+    fillMode: Image.PreserveAspectFit
+    smooth: true
+    onStatusChanged: {
+      if (source == "" || cameraView.front === index) return
+      if (status === Image.Ready) {
+        cameraView.front = index
+        root.cameraFrameDone(true)
+      } else if (status === Image.Error) {
+        root.cameraFrameDone(false, "Couldn't read the camera image")
       }
     }
   }

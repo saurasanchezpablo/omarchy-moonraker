@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- New: the printer's camera in the popup. Webcams come from Mainsail/Fluidd
+  (`/server/webcams/list`). Snapshots are fetched one at a time, about once a
+  second, and only while the popup is open. Rotation and flips from the webcam
+  settings are applied. With several webcams, click the picture to switch.
+  New settings: `showCamera` (also a toggle in the popup) and `webcam`.
+- The camera follows the `/webcam/` redirect to the streamer's own port, but only
+  on the printer's host, and the API key is only sent to the printer's own origin.
+- HTTP errors for images now show the redirect target, e.g. `HTTP 302 → …`.
+- `status` gains a `camera` object.
+- Mock printer gains a webcam, `--webcam`/`--no-webcam`, and a `huge-snapshot` scenario.
+
 ## 0.1.2 — 2026-10-01
 
 - Security: responses from the printer are now size- and time-limited. HTTP

@@ -8,8 +8,13 @@
 // buffer an unbounded response or hold a request open forever.
 var MAX_JSON_BYTES = 1048576      // Moonraker replies are a few KB
 var MAX_IMAGE_BYTES = 2097152     // slicer thumbnails are tens of KB
+var MAX_SNAPSHOT_BYTES = 4194304  // a 1080p webcam JPEG is a few hundred KB
 var REQUEST_TIMEOUT_S = 10
 var CONNECT_TIMEOUT_S = 5
+
+// Webcam snapshots: one frame at a time, only while the popup is open.
+var CAMERA_FRAME_MS = 1000        // pause between frames
+var CAMERA_RETRY_MS = 5000        // pause after a failed frame
 
 var DISPLAY_MODES = ["icon", "progress", "full"]
 var TEMP_KEYS = ["nozzle", "bed", "chamber"]
@@ -38,7 +43,8 @@ var ICONS = {
   offline: "\u{F0319}",   // nf-md-lan_disconnect
   web: "\u{F059F}",       // nf-md-web
   cog: "\u{F0493}",       // nf-md-cog
-  refresh: "\u{F0450}"    // nf-md-refresh
+  refresh: "\u{F0450}",   // nf-md-refresh
+  camera: "\u{F0100}"     // nf-md-camera
 }
 
 function normalizeUrl(raw) {
@@ -46,6 +52,22 @@ function normalizeUrl(raw) {
   if (url === "") return ""
   if (!/^https?:\/\//i.test(url)) url = "http://" + url
   return url.replace(/\/+$/, "")
+}
+
+// "scheme://host[:port]", lowercased; "" for anything that isn't http(s).
+function urlOrigin(url) {
+  var m = String(url || "").match(/^(https?:\/\/[^\/?#]+)/i)
+  return m ? m[1].toLowerCase() : ""
+}
+
+function sameOrigin(a, b) {
+  var o = urlOrigin(a)
+  return o !== "" && o === urlOrigin(b)
+}
+
+function sameHost(a, b) {
+  var h = hostLabel(a).toLowerCase()
+  return h !== "" && h === hostLabel(b).toLowerCase()
 }
 
 function hostLabel(url) {
@@ -207,6 +229,75 @@ function thumbnailPath(filename, metadata) {
   return dir + best.relative_path
 }
 
+// ---------- Webcams ----------
+
+// Enabled webcams from /server/webcams/list that can produce a still frame.
+function webcamList(result) {
+  var cams = toArray(result && result.webcams) || []
+  var out = []
+  for (var i = 0; i < cams.length; i++) {
+    var c = cams[i]
+    if (!c || c.enabled === false) continue
+    var snapshot = snapshotPath(c)
+    if (snapshot === "") continue
+    var rotation = Number(c.rotation) || 0
+    out.push({
+      name: String(c.name || "Camera " + (out.length + 1)),
+      snapshot: snapshot,
+      rotation: [0, 90, 180, 270].indexOf(rotation) >= 0 ? rotation : 0,
+      flipH: c.flip_horizontal === true,
+      flipV: c.flip_vertical === true,
+      aspect: parseAspect(c.aspect_ratio)
+    })
+  }
+  return out
+}
+
+// The snapshot URL as configured. mjpg-streamer style services that only
+// list a stream URL give a snapshot by swapping the action, as Mainsail does.
+function snapshotPath(cam) {
+  var snap = String(cam.snapshot_url || "").trim()
+  if (snap !== "") return snap
+  var stream = String(cam.stream_url || "").trim()
+  if (/[?&]action=stream\b/.test(stream)) return stream.replace(/([?&]action=)stream\b/, "$1snapshot")
+  return ""
+}
+
+function parseAspect(value) {
+  var m = String(value || "").match(/^\s*(\d+(?:\.\d+)?)\s*[:\/x]\s*(\d+(?:\.\d+)?)\s*$/)
+  var r = m ? Number(m[1]) / Number(m[2]) : 0
+  return r > 0.2 && r < 5 ? r : 16 / 9
+}
+
+// Index of the webcam named `name`, else the first one; -1 when there's none.
+function pickWebcam(list, name) {
+  if (!list || list.length === 0) return -1
+  for (var i = 0; i < list.length; i++)
+    if (list[i].name === name) return i
+  return 0
+}
+
+// Absolute URLs to try for a snapshot, most likely first. Relative URLs go to
+// the configured origin, then to the same host on its default port: Mainsail
+// and Fluidd serve /webcam/ from the web UI (nginx), not from Moonraker's 7125.
+function snapshotCandidates(baseUrl, snapshot) {
+  var snap = String(snapshot || "")
+  if (/^https?:\/\//i.test(snap)) return [snap]
+  if (/^[a-z][a-z0-9+.-]*:/i.test(snap)) return []   // rtsp:, webrtc:, …
+  var origin = urlOrigin(baseUrl)
+  if (origin === "" || snap === "") return []
+  var path = snap.charAt(0) === "/" ? snap : "/" + snap
+  var out = [origin + path]
+  var portless = origin.replace(/:\d+$/, "")
+  if (portless !== origin) out.push(portless + path)
+  return out
+}
+
+// A URL safe to show in `status`: no user:password@.
+function redactUrl(url) {
+  return String(url || "").replace(/^(https?:\/\/)[^\/@]*@/i, "$1")
+}
+
 function encodePath(path) {
   return String(path || "").split("/").map(encodeURIComponent).join("/")
 }
@@ -277,7 +368,7 @@ function curlConfig(opts) {
     "max-filesize = " + opts.maxBytes,
     "max-time = " + REQUEST_TIMEOUT_S,
     "connect-timeout = " + CONNECT_TIMEOUT_S,
-    "write-out = \"\\n%{http_code} %{content_type}\""
+    "write-out = \"\\n%{http_code} %{redirect_url} %{content_type}\""
   ]
   if (opts.method && opts.method !== "GET") lines.push("request = " + curlQuote(opts.method))
   if (opts.apiKey) lines.push("header = " + curlQuote("X-Api-Key: " + opts.apiKey))
@@ -290,16 +381,18 @@ function curlConfig(opts) {
 }
 
 // stdout is the body (unless written to a file) followed by the write-out
-// trailer "\n<status> <content-type>".
+// trailer "\n<status> <redirect-url> <content-type>". curl never follows
+// redirects; the target is only reported. The redirect URL has no spaces
+// (curl encodes them) and is empty when there was none.
 function parseCurlOutput(text) {
   var s = String(text || "")
   var cut = s.lastIndexOf("\n")
-  var trailer = cut >= 0 ? s.slice(cut + 1) : s
-  var space = trailer.indexOf(" ")
+  var parts = (cut >= 0 ? s.slice(cut + 1) : s).split(" ")
   return {
     body: cut >= 0 ? s.slice(0, cut) : "",
-    status: Number(space >= 0 ? trailer.slice(0, space) : trailer) || 0,
-    contentType: space >= 0 ? trailer.slice(space + 1) : ""
+    status: Number(parts[0]) || 0,
+    redirect: parts.length > 2 ? parts[1] : "",
+    contentType: parts.length > 2 ? parts.slice(2).join(" ") : (parts[1] || "")
   }
 }
 

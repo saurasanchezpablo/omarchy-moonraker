@@ -3,8 +3,9 @@
 
 Serves one of several scenarios (idle, heating, printing, paused, complete,
 error, klippy shutdown, ...) and lets you switch between them at runtime.
-File metadata and thumbnails come from dev/assets/thumbnail.png by default, or
-are proxied to a real printer when --upstream is given.
+File metadata and thumbnails come from dev/assets/thumbnail.png by default, and
+the webcam serves dev/assets/webcam.jpg; with --upstream all of these are
+proxied to a real printer instead.
 
   ./dev/mock_moonraker.py --scenario printing --file "benchy.gcode" \
       --upstream http://192.168.1.50 --api-key XXXX
@@ -48,6 +49,7 @@ ABUSE = {
     "flood-declared": "status query declares a 500 MB Content-Length",
     "hang": "status query never answers",
     "huge-thumbnail": "thumbnail streams an endless body",
+    "huge-snapshot": "webcam snapshot streams an endless body",
 }
 
 args = None
@@ -127,15 +129,32 @@ class Handler(BaseHTTPRequestHandler):
             self.flood("image/png")
             return
         if path.endswith("/.thumbs/mock-300x300.png"):
-            with open(args.thumbnail, "rb") as f:
-                body = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", "image/png")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self.send_file(args.thumbnail, "image/png")
+            return
+        if path == "/server/webcams/list":
+            cams = [] if args.no_webcam else [{
+                "name": "Mock Cam", "enabled": True, "service": "mjpegstreamer-adaptive",
+                "stream_url": "/webcam/?action=stream", "snapshot_url": "/webcam/?action=snapshot",
+                "rotation": 0, "flip_horizontal": False, "flip_vertical": False, "aspect_ratio": "16:9",
+            }]
+            self.send_json({"webcams": cams})
+            return
+        if path == "/webcam/" and not args.no_webcam:
+            if scenario["name"] == "huge-snapshot":
+                self.flood("image/jpeg")
+            else:
+                self.send_file(args.webcam, "image/jpeg")
             return
         self.send_error(404)
+
+    def send_file(self, name, content_type):
+        with open(name, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def proxy(self):
         if not args.upstream:
@@ -210,7 +229,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
             self.send_json({"status": self.status()})
-        elif path.startswith("/server/files/"):
+        elif path.startswith(("/server/files/", "/server/webcams/", "/webcam/")):
             self.proxy()
         else:
             self.send_error(404)
@@ -252,6 +271,9 @@ def main():
     ap.add_argument("--require-key", default="", help="reject requests without this X-Api-Key")
     ap.add_argument("--thumbnail", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "thumbnail.png"),
                     help="PNG served as the job thumbnail when there is no --upstream")
+    ap.add_argument("--webcam", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "webcam.jpg"),
+                    help="JPEG served as the webcam snapshot when there is no --upstream")
+    ap.add_argument("--no-webcam", action="store_true", help="report no webcams")
     args = ap.parse_args()
     scenario["name"] = args.scenario
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()

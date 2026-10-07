@@ -17,7 +17,8 @@ K-series z Klipperem i innymi.
   - miniatura modelu,
   - czas wydruku, czas do końca i godzina zakończenia,
   - warstwa i zużyty filament,
-  - temperatury: aktualna i docelowa.
+  - temperatury: aktualna i docelowa,
+  - podgląd z kamery drukarki (ustawionej w Mainsail/Fluidd), odświeżany mniej więcej co sekundę i tylko przy otwartym popupie.
 - **Sterowanie**: pauza, wznowienie i anulowanie. Anulowanie trzeba kliknąć drugi raz, żeby potwierdzić.
 - **Obsługa wszystkich stanów**:
   - brak konfiguracji, brak połączenia, brak lub zły API key,
@@ -72,6 +73,8 @@ Zapisują się we wpisie widgetu w `~/.config/omarchy/shell.json`:
 | `hideWhenIdle` | całkowicie ukryj widget, dopóki nic się nie drukuje. Ustawienia są w popupie widgetu, więc ta opcja jest dostępna tylko w `shell.json` albo przez IPC. Żeby go przywrócić: `omarchy-shell io.github.prodpixa.moonraker configure '{"hideWhenIdle":false}'` |
 | `hideWhenOffline` | ukryj widget, gdy drukarka jest niedostępna |
 | `chamberObject` | obiekt Klippera z temperaturą komory; pusty oznacza automatyczne wykrywanie |
+| `showCamera` | pokazuj kamerę drukarki w popupie (domyślnie tak); przełącznik jest w ustawieniach, gdy drukarka ma kamerę |
+| `webcam` | nazwa kamery z Mainsail/Fluidd; pusta oznacza pierwszą. Przy kilku kamerach kliknięcie obrazu przełącza na następną |
 
 Klucz API jest zapisany w `shell.json` otwartym tekstem, tak jak inne ustawienia widgetów Omarchy.
 

@@ -42,6 +42,7 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://127.0.0.1:7
 - By default the fake job gets synthesized metadata and `dev/assets/thumbnail.png`.
 - `--upstream`/`--api-key`/`--file`: proxy file metadata and thumbnails to a real printer instead.
 - `--require-key`: reject requests without this key (tests the auth states).
+- A webcam named "Mock Cam" serves `dev/assets/webcam.jpg`; `--webcam` picks another JPEG, `--no-webcam` reports none.
 - Pause / resume / cancel from the popup change the mock's state.
 
 Switch scenarios while it runs:
@@ -57,7 +58,8 @@ Scenarios: `idle`, `heating`, `printing-start`, `printing`, `printing-end`,
 
 Misbehaving-server scenarios, for checking the response limits: `flood` (endless
 chunked body), `flood-declared` (500 MB `Content-Length`), `hang` (never
-answers), and `huge-thumbnail` (endless thumbnail). The mock prints how much
+answers), `huge-thumbnail` (endless thumbnail), and `huge-snapshot` (endless
+webcam frame). The mock prints how much
 the client accepted before it hung up; the widget should report an error and
 the shell's memory should stay flat (`ps -o rss= -p $(pgrep -f quickshell)`).
 
@@ -106,5 +108,6 @@ Requirements: `grim`, `jq`, `python-pillow`, and a horizontal bar at the top.
 - [ ] Cancel: the first click arms, the second click within 3 s cancels
 - [ ] Right click cycles the styles and survives `omarchy restart shell`
 - [ ] Middle click opens the web UI
+- [ ] The camera shows within a couple of seconds of opening the popup, updates about once a second, and stops when the popup closes (`status` → `camera.streaming: false`)
 - [ ] `omarchy theme set <other>` repaints the widget and popup
 - [ ] Bar on the left/right edge (vertical): the chip shows the icon only

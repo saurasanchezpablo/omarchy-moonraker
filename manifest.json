@@ -5,7 +5,7 @@
   "version": "0.1.2",
   "author": "prodpixa",
   "license": "MIT",
-  "description": "3D printer status for any Klipper/Moonraker printer: progress, time left, and temperatures in the bar with a detail panel.",
+  "description": "3D printer status for any Klipper/Moonraker printer: progress, time left, and temperatures in the bar with a detail panel and the printer's camera.",
   "kinds": [
     "bar-widget"
   ],
@@ -27,7 +27,9 @@
       "pollInterval": 5,
       "compactWhenIdle": false,
       "hideWhenIdle": false,
-      "hideWhenOffline": false
+      "hideWhenOffline": false,
+      "showCamera": true,
+      "webcam": ""
     },
     "schema": [
       {
@@ -98,6 +100,20 @@
         "type": "boolean",
         "label": "Hide when the printer is offline",
         "defaultValue": false
+      },
+      {
+        "key": "showCamera",
+        "type": "boolean",
+        "label": "Show camera",
+        "description": "Show the printer's webcam in the popup. Snapshots are fetched about once a second, and only while the popup is open.",
+        "defaultValue": true
+      },
+      {
+        "key": "webcam",
+        "type": "string",
+        "label": "Webcam name",
+        "description": "Which webcam to show, as named in Mainsail/Fluidd. The first one when empty. Click the picture to switch.",
+        "defaultValue": ""
       }
     ]
   }

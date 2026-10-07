@@ -5,11 +5,12 @@
 | File | Role |
 |------|------|
 | `manifest.json` | Omarchy plugin manifest: id `io.github.prodpixa.moonraker`, kind `bar-widget`, entry point `Panel.qml`, defaults, and the settings schema. |
-| `Panel.qml` | The widget: bar chip, popup, HTTP client, polling, settings persistence, and IPC. |
+| `Panel.qml` | The widget: bar chip, popup, camera view, HTTP client, polling, settings persistence, and IPC. |
 | `Model.js` | Pure helpers with no QML state: URL normalization, state labels, ETA math, formatting, chamber detection, and bar text. |
 | `dev/install.sh` | Copies the plugin into `~/.config/omarchy/plugins/io.github.prodpixa.moonraker` and restarts the shell. |
 | `dev/mock_moonraker.py` | Fake Moonraker with switchable scenarios, for development and screenshots. |
 | `dev/assets/thumbnail.png` | Thumbnail the mock serves for its fake job. |
+| `dev/assets/webcam.jpg` | Frame the mock serves as its webcam snapshot. |
 | `dev/screenshots.sh` | Walks the widget through every state and captures `docs/screenshots/`. |
 | `dev/crop_popup.py`, `dev/crop_bar.py` | Crop the popup card and the bar chip out of screenshots (used by `screenshots.sh`). |
 
@@ -46,6 +47,7 @@ Limits, enforced by curl while the data streams in:
 |-------|-------|-------------|
 | JSON response size | 1 MB | `max-filesize` |
 | Thumbnail size | 2 MB | `max-filesize` (partial files removed with `remove-on-error`) |
+| Webcam snapshot size | 4 MB | `max-filesize` (same) |
 | Whole request | 10 s | `max-time` |
 | Connecting | 5 s | `connect-timeout` |
 | Protocols | http, https | `proto` |
@@ -64,6 +66,8 @@ until it crashes. curl closes the connection when a limit is hit.
 | When the file name changes | `GET /server/files/metadata?filename=…`: slicer estimate, layer count, thumbnails |
 | Popup open, when the job has a thumbnail | `GET /server/files/gcodes/<thumb>`, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/` and shown from there |
 | Pause / Resume / Cancel | `POST /printer/print/pause`, `/resume`, `/cancel` |
+| Popup open | `GET /server/webcams/list`: webcams configured in Mainsail/Fluidd |
+| While the popup is open | `GET <snapshot_url>`, one frame at a time, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/camera-{0,1}` |
 
 
 ### Polling
@@ -75,6 +79,34 @@ until it crashes. curl closes the connection when a limit is hit.
 - A `generation` counter is bumped whenever the URL or key changes, or the
   widget is destroyed. Responses from an older generation are dropped, so
   switching printers never mixes data.
+
+### Camera
+
+Nothing camera-related runs while the popup is closed. On open the widget reads
+`/server/webcams/list` and keeps the enabled webcams that can give a still
+frame: `snapshot_url`, or for mjpg-streamer style services, `stream_url` with
+`action=stream` swapped for `action=snapshot`. WebRTC/HLS-only webcams are
+skipped, because a still image is all the shell can show without a video stack.
+
+Snapshots are fetched one at a time. The next request goes out
+`Model.CAMERA_FRAME_MS` (1 s) after the previous frame is on screen, or
+`CAMERA_RETRY_MS` (5 s) after a failure, so a slow camera slows the frame rate
+down instead of piling up requests. Frames are decoded at display size in two
+`Image`s that take turns, so the picture never blanks between frames. On close
+the loop stops and the last frame is kept; it shows dimmed on the next open
+until a new one arrives.
+
+Finding the snapshot:
+
+- An absolute `http(s)` URL is used as is. Any other scheme is rejected.
+- A relative URL is tried at the configured origin, then at the same host on
+  its default port, because Mainsail/Fluidd serve `/webcam/` from nginx rather
+  than Moonraker's port 7125.
+- curl reports redirects but never follows them. The widget follows up to two
+  itself, and only when they stay on the same host (nginx often redirects
+  `/webcam/` to the streamer's own port, e.g. `:8080`).
+- The URL that answered is remembered until the webcam or printer changes.
+- A response that isn't `image/*` counts as a failure.
 
 ### State mapping
 
@@ -128,6 +160,9 @@ contains "chamber" (ignoring thermal-protection sensors).
 - The API key lives in `shell.json` in plain text, like all widget settings.
 - `status` over IPC never includes the key.
 - `configure` accepts only the known setting keys.
-- The key is sent only to the configured URL, and only through curl's stdin.
+- The key is sent only to the configured URL's origin, and only through curl's
+  stdin. Webcam snapshots on another port or host get no key.
+- Webcam URLs come from the printer. They are limited to http/https, and
+  redirects are followed only within the printer's host.
 - Responses are size- and time-limited (see *Talking to Moonraker*), and curl
   does not follow redirects.
