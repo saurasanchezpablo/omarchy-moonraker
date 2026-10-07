@@ -151,6 +151,16 @@ sends `SET_LED LED=<name> RED=1 GREEN=1 BLUE=1 WHITE=1` (channels the LED
 doesn't have are ignored) or `SET_PIN PIN=<name> VALUE=1`. Object names are
 checked against `[A-Za-z0-9_.-]` before they go into G-code.
 
+### Print tools: pause at layer
+
+Mainsail's and Fluidd's standard configs ship `SET_PAUSE_AT_LAYER` and
+`SET_PAUSE_NEXT_LAYER`, which store their plan in `SET_PRINT_STATS_INFO`'s
+variables and fire when the slicer's `SET_PRINT_STATS_INFO CURRENT_LAYER=…`
+reaches it. When all three macros exist, those two variables join the status
+query. The Tools button appears only while printing with known layers.
+Commands are built from integers only (`SET_PAUSE_AT_LAYER LAYER=120`,
+`ENABLE=0` to clear, `SET_PAUSE_NEXT_LAYER ENABLE=1`).
+
 ### Notifications
 
 After every status update, `Model.notifications(previous, current)` compares

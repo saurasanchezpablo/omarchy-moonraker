@@ -6,6 +6,10 @@
   (e.g. filament runout), or has 10 minutes left, and when Klipper or the
   filament changer stops with an error. Pause/cancel from the popup stays
   quiet. Setting: `notify` (also a toggle in the popup).
+- New: print tools (the Tools button while printing, or `t`): pause at a
+  chosen layer or after the current one, using the standard Mainsail/Fluidd
+  macros. A planned pause shows as "Pauses at" in the job details. IPC:
+  `pauseAtLayer`, `showTools`.
 - New: a bulb on the camera picture switches the chamber light (also `l` in
   the popup and the `toggleLight` IPC call). The light is detected from the
   printer's LED objects; setting: `lightObject`.

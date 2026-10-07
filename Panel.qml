@@ -69,6 +69,9 @@ Panel {
   property var light: null
   property bool lightOn: false
   property bool lightBusy: false
+  // Pause at layer: whether the printer has the macros, and the plan.
+  property bool pauseMacros: false
+  property var pausePlan: ({ nextLayer: false, atLayer: 0 })
   property var afc: null
   // Lane loaded when the current change started; AFC forgets it once unloaded.
   property string changeOrigin: ""
@@ -87,6 +90,7 @@ Panel {
 
   // ---------- UI state ----------
   property bool settingsOpen: false
+  property bool toolsOpen: false
   property bool cancelArmed: false
   property bool actionBusy: false
   property int generation: 0
@@ -152,6 +156,9 @@ Panel {
   }, root.display, root.barTemps)
 
   readonly property bool iconOnly: barLabel.indexOf(" ") < 0
+  // Layer-based tools only work when the slicer reports layers.
+  readonly property bool canPauseAtLayer: pauseMacros && printing && totalLayer > 0
+  readonly property bool hasTools: canPauseAtLayer
 
   readonly property string heroStatus: {
     if (!configured) return "Not configured"
@@ -290,6 +297,7 @@ Panel {
     }
     var extra = afcObjects.length > 0 ? Model.afcQuery(afcLaneObjects) : []
     if (light) extra.push(encodeURIComponent(light.object) + "=" + (light.kind === "pin" ? "value" : "color_data"))
+    if (pauseMacros) extra.push(encodeURIComponent(Model.PAUSE_MACROS) + "=pause_next_layer,pause_at_layer")
     inflight = request("GET", Model.queryPath(chamberObject, extra), function(err, result) {
       root.inflight = null
       if (err) {
@@ -321,6 +329,7 @@ Panel {
       var objects = Model.toArray(result ? result.objects : []) || []
       root.chamberObject = Model.pickChamberObject(objects, root.setting("chamberObject", ""))
       root.light = Model.pickLight(objects, root.setting("lightObject", ""))
+      root.pauseMacros = Model.hasPauseMacros(objects)
       root.afcObjects = objects.indexOf("AFC") >= 0
         ? objects.filter(function(o) { return String(o).indexOf("AFC_") === 0 }) : []
       root.objectsProbed = true
@@ -366,6 +375,7 @@ Panel {
       }
     }
     if (light && !lightBusy) lightOn = Model.lightIsOn(light, status)
+    if (pauseMacros) pausePlan = Model.pausePlan(status)
 
     var prevAfc = afc
     afc = Model.afcState(status, afcLaneObjects)
@@ -604,6 +614,9 @@ Panel {
     lastSnapshot = null
     light = null
     lightOn = false
+    pauseMacros = false
+    pausePlan = ({ nextLayer: false, atLayer: 0 })
+    toolsOpen = false
     thumbnailSource = ""
     thumbnailFor = ""
     webcams = []
@@ -634,6 +647,15 @@ Panel {
         root.lightOn = !root.lightOn
         root.lastError = err.message
       }
+      root.poll()
+    })
+  }
+
+  // Fire-and-forget G-code from the popup; the next poll shows the result.
+  function sendGcode(script) {
+    if (script === "") return
+    request("POST", Model.gcodePath(script), function(err) {
+      if (err) root.lastError = err.message
       root.poll()
     })
   }
@@ -672,6 +694,7 @@ Panel {
     if (opened) {
       settingsOpen = !configured || authFailed
       cancelArmed = false
+      if (!printing) toolsOpen = false
       urlField.text = setting("url", "")
       keyField.text = setting("apiKey", "")
       poll()
@@ -747,6 +770,8 @@ Panel {
     function refresh(): void { root.poll() }
     function cycleDisplay(): void { root.cycleDisplay() }
     function toggleLight(): void { root.toggleLight() }
+    // Pause when this layer starts; 0 clears it.
+    function pauseAtLayer(layer: int): void { root.sendGcode(Model.pauseAtLayerCommand(layer)) }
     // Merge settings from a JSON object, e.g. '{"url":"http://printer","display":"full"}'.
     function configure(json: string): string {
       var patch
@@ -761,6 +786,10 @@ Panel {
       root.saveSettings(clean)
       return "ok"
     }
+    function showTools(): void {
+      root.open()
+      root.toolsOpen = root.hasTools
+    }
     function showSettings(): void {
       root.open()
       root.settingsOpen = true
@@ -772,6 +801,7 @@ Panel {
         auth: !root.authFailed, klippy: root.klippyState, file: root.filename, progress: root.progress,
         remaining: root.remaining, temps: root.temps, error: root.lastError,
         light: root.light ? { object: root.light.object, on: root.lightOn } : null,
+        pause: root.pauseMacros ? { nextLayer: root.pausePlan.nextLayer, atLayer: root.pausePlan.atLayer } : null,
         filament: root.afc === null ? null : {
           loaded: root.afc.loaded, state: root.afc.state, changing: root.changing,
           from: root.changeFrom ? root.changeFrom.name : "", to: root.changeTo ? root.changeTo.name : "",
@@ -847,7 +877,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: urlField.activeFocus || keyField.activeFocus
+      blocked: urlField.activeFocus || keyField.activeFocus || layerField.field.activeFocus
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
@@ -855,6 +885,7 @@ Panel {
         else if (t === "s") root.settingsOpen = !root.settingsOpen
         else if (t === "o") root.openWebUi()
         else if (t === "l") root.toggleLight()
+        else if (t === "t" && root.hasTools) root.toolsOpen = !root.toolsOpen
       }
 
       Column {
@@ -1253,6 +1284,12 @@ Panel {
             }
             InfoPair { label: "Filament"; value: Model.formatFilament(root.filamentUsed) }
             InfoPair {
+              visible: root.printing && (root.pausePlan.nextLayer || root.pausePlan.atLayer > 0)
+              label: "Pauses at"
+              value: root.pausePlan.nextLayer ? "next layer" : "layer " + root.pausePlan.atLayer
+              heating: true
+            }
+            InfoPair {
               visible: root.printing && root.afc !== null && root.afc.toolchanges > 0
               label: "Color changes"
               value: root.afc ? root.afc.toolchange + " / " + root.afc.toolchanges : ""
@@ -1341,7 +1378,7 @@ Panel {
           width: parent.width
           spacing: Style.space(6)
 
-          readonly property int count: (root.printing ? 2 : 0) + 2
+          readonly property int count: (root.printing ? 2 : 0) + (root.hasTools ? 1 : 0) + 2
           readonly property real cellWidth: (width - spacing * (count - 1)) / count
 
           ActionButton {
@@ -1362,6 +1399,14 @@ Panel {
           }
 
           ActionButton {
+            visible: root.hasTools
+            iconText: Model.ICONS.tools
+            text: "Tools"
+            active: root.toolsOpen
+            onClicked: root.toolsOpen = !root.toolsOpen
+          }
+
+          ActionButton {
             iconText: Model.ICONS.web
             text: "Web UI"
             enabled: root.configured
@@ -1373,6 +1418,72 @@ Panel {
             text: "Settings"
             active: root.settingsOpen
             onClicked: root.settingsOpen = !root.settingsOpen
+          }
+        }
+
+        // ---------- Print tools ----------
+        Column {
+          visible: root.toolsOpen && root.hasTools
+          width: parent.width
+          spacing: Style.space(10)
+
+          PanelSeparator { foreground: root.fg }
+
+          PanelSectionHeader {
+            visible: root.canPauseAtLayer
+            text: "PAUSE"
+            foreground: root.fg
+            fontFamily: root.fontFamily
+          }
+
+          // Pause at layer N: number field + set/clear.
+          Row {
+            visible: root.canPauseAtLayer
+            width: parent.width
+            spacing: Style.space(6)
+
+            NumberField {
+              id: layerField
+              anchors.verticalCenter: parent.verticalCenter
+              from: Math.min(root.currentLayer + 1, root.totalLayer)
+              to: Math.max(1, root.totalLayer)
+              value: root.pausePlan.atLayer > 0 ? root.pausePlan.atLayer : Math.min(root.currentLayer + 1, root.totalLayer)
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              fontSize: Style.font.bodySmall
+              fieldWidth: Style.space(110)
+            }
+
+            Button {
+              anchors.verticalCenter: parent.verticalCenter
+              width: parent.width - layerField.width - parent.spacing
+              iconText: Model.ICONS.layers
+              text: root.pausePlan.atLayer > 0 && root.pausePlan.atLayer === layerField.field.value
+                ? "Clear layer " + root.pausePlan.atLayer : "Pause at this layer"
+              active: root.pausePlan.atLayer > 0
+              fontSize: Style.font.bodySmall
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              bordered: true
+              onClicked: {
+                var n = layerField.field.value
+                root.sendGcode(Model.pauseAtLayerCommand(root.pausePlan.atLayer === n ? 0 : n))
+                keyCatcher.forceActiveFocus()
+              }
+            }
+          }
+
+          Button {
+            visible: root.canPauseAtLayer
+            width: parent.width
+            iconText: Model.ICONS.pause
+            text: root.pausePlan.nextLayer ? "Pausing after this layer · undo" : "Pause after this layer"
+            active: root.pausePlan.nextLayer
+            fontSize: Style.font.bodySmall
+            foreground: root.fg
+            fontFamily: root.fontFamily
+            bordered: true
+            onClicked: root.sendGcode(Model.pauseNextLayerCommand(!root.pausePlan.nextLayer))
           }
         }
 

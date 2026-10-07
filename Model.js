@@ -47,7 +47,9 @@ var ICONS = {
   camera: "\u{F0100}",    // nf-md-camera
   swap: "\u{F04E1}",      // nf-md-swap_horizontal
   lightOn: "\u{F0335}",   // nf-md-lightbulb
-  lightOff: "\u{F0336}"   // nf-md-lightbulb_outline
+  lightOff: "\u{F0336}",  // nf-md-lightbulb_outline
+  tools: "\u{F1064}",     // nf-md-tools
+  layers: "\u{F0F58}"     // nf-md-layers_triple
 }
 
 function normalizeUrl(raw) {
@@ -292,6 +294,39 @@ function lightCommand(light, on) {
 
 function gcodePath(script) {
   return "/printer/gcode/script?script=" + encodeURIComponent(script)
+}
+
+// ---------- Pause at layer ----------
+// Mainsail's/Fluidd's standard macros keep the plan in SET_PRINT_STATS_INFO's
+// variables; the slicer's SET_PRINT_STATS_INFO CURRENT_LAYER calls fire it.
+
+var PAUSE_MACROS = "gcode_macro SET_PRINT_STATS_INFO"
+
+function hasPauseMacros(objects) {
+  objects = toArray(objects) || []
+  return objects.indexOf("gcode_macro SET_PAUSE_AT_LAYER") >= 0
+    && objects.indexOf("gcode_macro SET_PAUSE_NEXT_LAYER") >= 0
+    && objects.indexOf(PAUSE_MACROS) >= 0
+}
+
+// { nextLayer: bool, atLayer: layer number or 0 }
+function pausePlan(status) {
+  var v = status && status[PAUSE_MACROS] ? status[PAUSE_MACROS] : {}
+  var at = v.pause_at_layer || {}
+  var next = v.pause_next_layer || {}
+  return {
+    nextLayer: next.enable === true,
+    atLayer: at.enable === true ? (Number(at.layer) || 0) : 0
+  }
+}
+
+function pauseAtLayerCommand(layer) {
+  var n = Math.floor(Number(layer))
+  return n > 0 ? "SET_PAUSE_AT_LAYER LAYER=" + n : "SET_PAUSE_AT_LAYER ENABLE=0"
+}
+
+function pauseNextLayerCommand(enable) {
+  return "SET_PAUSE_NEXT_LAYER ENABLE=" + (enable ? 1 : 0)
 }
 
 // ---------- Notifications ----------

@@ -28,6 +28,9 @@ K-series z Klipperem i innymi.
   błąd, „zostało 10 minut” oraz błędy Klippera i zmieniacza filamentu, ze
   zdjęciem z kamery, żeby od razu widzieć gotowy model albo problem.
 - **Sterowanie**: pauza, wznowienie i anulowanie. Anulowanie trzeba kliknąć drugi raz, żeby potwierdzić.
+- **Narzędzia wydruku** (przycisk Tools w trakcie druku albo klawisz `t`): pauza na
+  wybranej warstwie albo po bieżącej, np. żeby włożyć magnesy. Wymaga standardowych
+  makr pauzy z Mainsail/Fluidd i slicera, który podaje numery warstw.
 - **Obsługa wszystkich stanów**:
   - brak konfiguracji, brak połączenia, brak lub zły API key,
   - Klipper uruchamia się, jest rozłączony albo w stanie shutdown,

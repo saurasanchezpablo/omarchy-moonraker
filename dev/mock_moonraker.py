@@ -74,7 +74,7 @@ ABUSE = {
 args = None
 scenario = {"name": "printing"}
 # State changed by G-code sent through /printer/gcode/script.
-machine = {"light": 1.0}
+machine = {"light": 1.0, "pause_next": False, "pause_at": 0}
 gcode_log = []
 tokens = set()
 
@@ -243,6 +243,10 @@ class Handler(BaseHTTPRequestHandler):
             "heater_bed": {"temperature": bed, "target": targets[1]},
             "heater_generic chamber": {"temperature": chamber, "target": targets[2]},
             "led case": {"color_data": [[0.0, 0.0, 0.0, machine["light"]]]},
+            "gcode_macro SET_PRINT_STATS_INFO": {
+                "pause_next_layer": {"enable": machine["pause_next"], "call": "PAUSE"},
+                "pause_at_layer": {"enable": machine["pause_at"] > 0, "layer": machine["pause_at"], "call": "PAUSE"},
+            },
             **(self.afc_status() if args.afc else {}),
         }
 
@@ -260,7 +264,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(token)
         elif path == "/printer/objects/list":
             objects = ["print_stats", "virtual_sdcard", "display_status", "extruder",
-                       "heater_bed", "webhooks", "heater_generic chamber", "led case", "led hotend"]
+                       "heater_bed", "webhooks", "heater_generic chamber", "led case", "led hotend",
+                       "gcode_macro SET_PRINT_STATS_INFO", "gcode_macro SET_PAUSE_AT_LAYER",
+                       "gcode_macro SET_PAUSE_NEXT_LAYER"]
             if args.afc:
                 objects += ["AFC", "AFC_canvas CANVAS_1", "AFC_hub toolhead_4way_hub", "AFC_extruder extruder"]
                 objects += ["AFC_lane " + l[0] for l in AFC_LANES] + ["AFC_canvas_lane " + l[0] for l in AFC_LANES]
@@ -290,6 +296,10 @@ class Handler(BaseHTTPRequestHandler):
         params = dict(w.split("=", 1) for w in words[1:] if "=" in w)
         if words and words[0] == "SET_LED" and params.get("LED") == "case":
             machine["light"] = float(params.get("WHITE", 0))
+        elif words and words[0] == "SET_PAUSE_AT_LAYER":
+            machine["pause_at"] = int(params["LAYER"]) if "LAYER" in params else 0
+        elif words and words[0] == "SET_PAUSE_NEXT_LAYER":
+            machine["pause_next"] = params.get("ENABLE", "1") != "0"
         return "ok"
 
     def do_POST(self):
