@@ -36,7 +36,9 @@ if [[ -n ${UPSTREAM:-} && -z $upstream_key && -t 0 ]]; then
 fi
 
 mkdir -p "$OUT"
-rm -f "$OUT"/*.png
+# Only the shots this script takes; others (15-camera-filament-change.png)
+# are made by hand.
+rm -f "$OUT"/0*.png "$OUT"/1[0-4]-*.png
 
 read -r MON_W < <(hyprctl monitors -j | jq -r '.[0].width')
 # Bar geometry from its layer surface, so nothing below the bar gets captured.
@@ -61,7 +63,9 @@ set_entry() {  # set_entry '<JSON object merged into the widget settings>'
 }
 
 restore() {
-  omarchy-shell -q $ID close
+  # Nothing here may abort the trap (set -e): shell.json must come back.
+  set +e
+  omarchy-shell -q "$ID" close >/dev/null 2>&1
   cat "$BACKUP" >"$CFG" && rm -f "$BACKUP"
   [[ -n ${MOCK_PID:-} ]] && kill "$MOCK_PID" 2>/dev/null || true
   omarchy restart shell >/dev/null 2>&1 || true
@@ -87,7 +91,7 @@ capture() {
   ipc refresh
   sleep 1.5
   grim -g "$BAR_REGION" "$OUT/$name-bar.png"
-  ./dev/crop_bar.py "$OUT/$name-bar.png" "$OUT/$name-bar.png"
+  python3 dev/crop_bar.py "$OUT/$name-bar.png" "$OUT/$name-bar.png"
   [[ ${2:-} == bar-only ]] && return
   closed=$(mktemp --suffix .png)
   open=$(mktemp --suffix .png)
@@ -103,7 +107,7 @@ capture() {
     mv "$open.next" "$open"
   done
   rm -f "$open.next"
-  ./dev/crop_popup.py "$closed" "$open" "$OUT/$name.png"
+  python3 dev/crop_popup.py "$closed" "$open" "$OUT/$name.png"
   rm -f "$closed" "$open"
   echo "captured $name"
 }
