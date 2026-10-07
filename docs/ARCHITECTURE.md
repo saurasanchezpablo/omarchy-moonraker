@@ -186,8 +186,16 @@ needs Spoolman's own address or credentials. On popup open it asks
 until the printer changes. The active spool and the picker list come through
 `/server/spoolman/proxy` with `use_v2_response`, as JSON request bodies (curl
 reads them from its stdin config like everything else). Nothing Spoolman-related
-is polled. The line is hidden on AFC printers, whose lanes already carry the
-spool data AFC syncs from Spoolman.
+is polled; the spool list loads when Tools opens.
+
+Everything lives in Tools. Without a changer it is one line for Moonraker's
+active spool, with a picker that posts to `/server/spoolman/spool_id`. With
+AFC, each lane's `spool_id` joins the lane fields in the status query, and
+each lane gets a row; picking a spool sends `SET_SPOOL_ID LANE=<lane>
+SPOOL_ID=<id>` (or no `SPOOL_ID` to clear), and AFC then syncs the lane's
+material, color, and weight from Spoolman. AFC refuses a spool held by another
+lane, so the picker marks those and doesn't offer them. Lane names and ids are
+checked before they go into G-code.
 
 ### Notifications
 

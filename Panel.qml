@@ -89,6 +89,8 @@ Panel {
   property var spool: null
   property var spools: []
   property bool spoolPickerOpen: false
+  // The AFC lane the picker assigns to; "" picks Moonraker's active spool.
+  property string spoolPickerLane: ""
   property var afc: null
   // Lane loaded when the current change started; AFC forgets it once unloaded.
   property string changeOrigin: ""
@@ -721,6 +723,8 @@ Panel {
       root.spoolmanConnected = result.spoolman_connected === true
       root.spoolId = result.spool_id === null || result.spool_id === undefined ? -1 : Number(result.spool_id)
       root.loadSpool()
+      // Tools (lane rows, picker) needs the spool names.
+      if (root.toolsOpen && root.spoolmanConnected) root.loadSpools()
     })
   }
 
@@ -746,6 +750,39 @@ Panel {
       if (err || !result || result.error) return
       onData(result.response)
     }, "", Model.spoolmanProxy(path))
+  }
+
+  function spoolById(id) {
+    if (spool && spool.id === id) return spool
+    for (var i = 0; i < spools.length; i++) if (spools[i].id === id) return spools[i]
+    return null
+  }
+
+  function openSpoolPicker(lane) {
+    var same = spoolPickerOpen && spoolPickerLane === lane
+    spoolPickerLane = lane
+    spoolPickerOpen = !same
+    if (spoolPickerOpen) loadSpools()
+  }
+
+  // The picker's choice: a lane assignment through AFC, or the active spool.
+  function chooseSpool(id) {
+    var lane = spoolPickerLane
+    spoolPickerOpen = false
+    if (lane !== "") {
+      userActionAt = Date.now()
+      sendGcode(Model.afcSpoolCommand(lane, id))
+    } else {
+      setSpool(id)
+    }
+  }
+
+  // The lane (tool label) another AFC lane already holds this spool on.
+  function spoolTakenBy(id, lane) {
+    if (!afc || id < 0) return ""
+    for (var i = 0; i < afc.lanes.length; i++)
+      if (afc.lanes[i].spoolId === id && afc.lanes[i].name !== lane) return Model.laneLabel(afc.lanes[i])
+    return ""
   }
 
   // id < 0 clears the active spool.
@@ -797,6 +834,7 @@ Panel {
     root.bar.run("xdg-open '" + root.baseUrl.replace(/'/g, "'\\''") + "'")
   }
 
+  onToolsOpenChanged: if (toolsOpen && spoolmanConnected) loadSpools()
   onBaseUrlChanged: reset()
   onApiKeyChanged: reset()
   onWebcamKeyChanged: {
@@ -824,6 +862,7 @@ Panel {
       if (online) loadWebcams()
       if (online && (!spoolmanChecked || spoolmanAvailable)) loadSpoolman()
       spoolPickerOpen = false
+      spoolPickerLane = ""
     }
   }
 
@@ -918,6 +957,15 @@ Panel {
       root.saveSettings(clean)
       return "ok"
     }
+    // Assign a Spoolman spool to an AFC lane; "none" clears the lane.
+    function setLaneSpool(lane: string, id: string): string {
+      var n = id === "none" ? -1 : parseInt(id, 10)
+      var cmd = isNaN(n) ? "" : Model.afcSpoolCommand(lane, n)
+      if (cmd === "" || !root.afc || !Model.afcLane(root.afc, lane)) return "expected a lane name and a spool id or none"
+      root.userActionAt = Date.now()
+      root.sendGcode(cmd)
+      return "ok"
+    }
     // Make this Spoolman spool the active one; "none" clears it.
     function setSpool(id: string): string {
       var n = id === "none" ? -1 : parseInt(id, 10)
@@ -955,7 +1003,7 @@ Panel {
           error: root.afc.error, message: root.afc.message,
           lanes: root.afc.lanes.map(function(l) {
             return { name: l.name, tool: l.tool, material: l.material, color: l.colors[0] || "",
-                     weight: l.weight, ready: l.ready, loaded: l.loaded }
+                     weight: l.weight, ready: l.ready, loaded: l.loaded, spoolId: l.spoolId }
           })
         },
         camera: {
@@ -1506,134 +1554,6 @@ Panel {
           }
         }
 
-        // ---------- Spoolman: active spool + picker ----------
-        // AFC printers show their spools in the lane cards instead.
-        PanelSeparator {
-          visible: spoolSection.visible
-          foreground: root.fg
-        }
-
-        Column {
-          id: spoolSection
-          visible: root.spoolmanAvailable && root.online && root.afc === null
-          width: parent.width
-          spacing: Style.space(6)
-
-          Item {
-            width: parent.width
-            implicitHeight: Style.space(28)
-
-            Swatch {
-              id: spoolSwatch
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-              implicitWidth: Style.space(20)
-              colors: root.spool ? root.spool.colors : []
-            }
-            Text {
-              anchors.left: spoolSwatch.right
-              anchors.leftMargin: Style.space(10)
-              anchors.right: spoolWeight.left
-              anchors.rightMargin: Style.space(8)
-              anchors.verticalCenter: parent.verticalCenter
-              textFormat: Text.PlainText
-              text: !root.spoolmanConnected ? "Spoolman not connected"
-                : root.spool ? root.spool.name + (root.spool.material ? "  ·  " + root.spool.material : "")
-                : "No spool selected"
-              color: root.fg
-              opacity: root.spool ? 1 : 0.6
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              elide: Text.ElideRight
-            }
-            Text {
-              id: spoolWeight
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              textFormat: Text.PlainText
-              text: (root.spool ? (Model.formatWeight(root.spool.remaining) || "") + "  " : "")
-                + (root.spoolmanConnected ? (root.spoolPickerOpen ? "\u25B4" : "\u25BE") : "")
-              color: root.fg
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-            }
-            MouseArea {
-              anchors.fill: parent
-              enabled: root.spoolmanConnected
-              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-              onClicked: {
-                root.spoolPickerOpen = !root.spoolPickerOpen
-                if (root.spoolPickerOpen) root.loadSpools()
-              }
-            }
-          }
-
-          ListView {
-            id: spoolPicker
-            visible: root.spoolPickerOpen
-            width: parent.width
-            readonly property real rowHeight: Style.space(28)
-            height: Math.min(count, 6) * rowHeight
-            clip: true
-            interactive: count > 6
-            model: root.spools.concat([{ id: -1, name: "No spool", material: "", colors: [], remaining: NaN }])
-
-            delegate: Rectangle {
-              required property var modelData
-              readonly property bool isActive: modelData.id === root.spoolId
-              width: spoolPicker.width
-              height: spoolPicker.rowHeight
-              radius: Style.cornerRadius
-              color: rowArea.containsMouse || isActive ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08) : "transparent"
-
-              Swatch {
-                id: rowSwatch
-                anchors.left: parent.left
-                anchors.leftMargin: Style.space(4)
-                anchors.verticalCenter: parent.verticalCenter
-                implicitWidth: Style.space(14)
-                colors: modelData.colors
-                visible: modelData.id >= 0
-              }
-              Text {
-                anchors.left: rowSwatch.right
-                anchors.leftMargin: Style.space(8)
-                anchors.right: rowWeight.left
-                anchors.rightMargin: Style.space(8)
-                anchors.verticalCenter: parent.verticalCenter
-                textFormat: Text.PlainText
-                text: (modelData.id >= 0 ? "#" + modelData.id + "  " : "") + modelData.name
-                  + (modelData.material ? "  ·  " + modelData.material : "")
-                color: root.fg
-                opacity: modelData.id >= 0 ? 1 : 0.6
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: isActive
-                elide: Text.ElideRight
-              }
-              Text {
-                id: rowWeight
-                anchors.right: parent.right
-                anchors.rightMargin: Style.space(4)
-                anchors.verticalCenter: parent.verticalCenter
-                textFormat: Text.PlainText
-                text: Model.formatWeight(modelData.remaining)
-                color: root.fg
-                opacity: 0.6
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-              }
-              MouseArea {
-                id: rowArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.setSpool(modelData.id)
-              }
-            }
-          }
-        }
-
         // ---------- Filament lanes ----------
         PanelSeparator {
           visible: laneSection.visible
@@ -1789,6 +1709,113 @@ Panel {
             onClicked: root.sendGcode(Model.pauseNextLayerCommand(!root.pausePlan.nextLayer))
           }
 
+          // ---------- Spools (Spoolman) ----------
+          PanelSectionHeader {
+            visible: root.spoolmanAvailable
+            text: root.afc ? "SPOOLS" : "SPOOL"
+            foreground: root.fg
+            fontFamily: root.fontFamily
+          }
+
+          ToolsNote {
+            visible: root.spoolmanAvailable && !root.spoolmanConnected
+            text: "Moonraker can't reach the Spoolman server."
+          }
+
+          // Without a changer: Moonraker's active spool.
+          SpoolRow {
+            visible: root.spoolmanConnected && root.afc === null
+            spoolInfo: root.spool
+            label: ""
+            colors: root.spool ? root.spool.colors : []
+            open: root.spoolPickerOpen && root.spoolPickerLane === ""
+            onPicked: root.openSpoolPicker("")
+          }
+
+          // With AFC: one row per lane, assigned through SET_SPOOL_ID.
+          Repeater {
+            model: root.spoolmanConnected && root.afc ? root.afc.lanes : []
+            SpoolRow {
+              required property var modelData
+              spoolInfo: modelData.spoolId >= 0 ? (root.spoolById(modelData.spoolId)
+                || { id: modelData.spoolId, name: "Spool #" + modelData.spoolId, material: "", colors: [], remaining: NaN }) : null
+              label: Model.laneLabel(modelData)
+              colors: modelData.colors
+              open: root.spoolPickerOpen && root.spoolPickerLane === modelData.name
+              onPicked: root.openSpoolPicker(modelData.name)
+            }
+          }
+
+          ListView {
+            id: spoolPicker
+            visible: root.spoolPickerOpen && root.spoolmanConnected
+            width: parent.width
+            readonly property real rowHeight: Style.space(28)
+            height: Math.min(count, 6) * rowHeight
+            clip: true
+            interactive: count > 6
+            model: root.spools.concat([{ id: -1, name: "No spool", material: "", colors: [], remaining: NaN }])
+
+            delegate: Rectangle {
+              required property var modelData
+              readonly property bool isActive: root.spoolPickerLane === ""
+                ? modelData.id === root.spoolId
+                : root.afc !== null && (Model.afcLane(root.afc, root.spoolPickerLane) || {}).spoolId === modelData.id
+              readonly property string takenBy: root.spoolPickerLane === "" ? "" : root.spoolTakenBy(modelData.id, root.spoolPickerLane)
+              width: spoolPicker.width
+              height: spoolPicker.rowHeight
+              radius: Style.cornerRadius
+              color: (rowArea.containsMouse && takenBy === "") || isActive ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08) : "transparent"
+              opacity: takenBy === "" ? 1 : 0.45
+
+              Swatch {
+                id: rowSwatch
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                implicitWidth: Style.space(14)
+                colors: modelData.colors
+                visible: modelData.id >= 0
+              }
+              Text {
+                anchors.left: rowSwatch.right
+                anchors.leftMargin: Style.space(8)
+                anchors.right: rowWeight.left
+                anchors.rightMargin: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: (modelData.id >= 0 ? "#" + modelData.id + "  " : "") + modelData.name
+                  + (modelData.material ? "  ·  " + modelData.material : "")
+                color: root.fg
+                opacity: modelData.id >= 0 ? 1 : 0.6
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: isActive
+                elide: Text.ElideRight
+              }
+              Text {
+                id: rowWeight
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: takenBy !== "" ? "on " + takenBy : Model.formatWeight(modelData.remaining)
+                color: root.fg
+                opacity: 0.6
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+              MouseArea {
+                id: rowArea
+                anchors.fill: parent
+                enabled: takenBy === ""
+                hoverEnabled: true
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: root.chooseSpool(modelData.id)
+              }
+            }
+          }
+
           ToolsNote {
             visible: root.pauseMacros && root.printing && root.totalLayer === 0
             text: "This print doesn't report layers, so it can't pause at one."
@@ -1798,9 +1825,8 @@ Panel {
             text: "This printer has neither the layer-pause macros (SET_PAUSE_AT_LAYER) nor [exclude_object]."
           }
           ToolsNote {
-            visible: root.excludeSupported && !root.canSkip
-            text: root.printing ? "Only one object on this plate: nothing to skip."
-              : "Skipping a failed object is available during a print with several objects."
+            visible: root.excludeSupported && root.printing && !root.canSkip
+            text: "Only one object on this plate: nothing to skip."
           }
 
           PanelSectionHeader {
@@ -2198,6 +2224,57 @@ Panel {
       font.family: root.fontFamily
       font.pixelSize: Style.font.body
       font.bold: true
+    }
+  }
+
+  // A spool line: swatch (with the lane's tool on AFC), name, grams, chevron.
+  component SpoolRow: Item {
+    property var spoolInfo: null
+    property string label: ""
+    property var colors: []
+    property bool open: false
+    signal picked()
+    width: parent.width
+    implicitHeight: Style.space(30)
+
+    Swatch {
+      id: rowSwatch
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      implicitWidth: Style.space(label !== "" ? 26 : 20)
+      colors: parent.spoolInfo && parent.spoolInfo.colors.length ? parent.spoolInfo.colors : parent.colors
+      label: parent.label
+    }
+    Text {
+      anchors.left: rowSwatch.right
+      anchors.leftMargin: Style.space(10)
+      anchors.right: rowRight.left
+      anchors.rightMargin: Style.space(8)
+      anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
+      text: parent.spoolInfo ? parent.spoolInfo.name + (parent.spoolInfo.material ? "  ·  " + parent.spoolInfo.material : "")
+        : "No spool assigned"
+      color: root.fg
+      opacity: parent.spoolInfo ? 1 : 0.6
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+      elide: Text.ElideRight
+    }
+    Text {
+      id: rowRight
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
+      text: (parent.spoolInfo ? (Model.formatWeight(parent.spoolInfo.remaining) || "") + "  " : "")
+        + (parent.open ? "\u25B4" : "\u25BE")
+      color: root.fg
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+    }
+    MouseArea {
+      anchors.fill: parent
+      cursorShape: Qt.PointingHandCursor
+      onClicked: parent.picked()
     }
   }
 

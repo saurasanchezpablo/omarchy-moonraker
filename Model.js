@@ -368,7 +368,10 @@ function spoolInfo(spool) {
   var vendor = f.vendor && f.vendor.name ? String(f.vendor.name) : ""
   var colors = String(f.multi_color_hexes || "").split(",").map(normalizeColor).filter(function(c) { return c !== "" })
   if (colors.length === 0 && normalizeColor(f.color_hex) !== "") colors = [normalizeColor(f.color_hex)]
-  var name = [vendor, String(f.name || "")].filter(function(s) { return s !== "" }).join(" ")
+  var fname = String(f.name || "")
+  // Many filament names already start with the brand ("SUNLU PETG Black").
+  if (vendor !== "" && fname.toLowerCase().indexOf(vendor.toLowerCase()) === 0) vendor = ""
+  var name = [vendor, fname].filter(function(s) { return s !== "" }).join(" ")
   return {
     id: Number(spool.id),
     name: name || String(f.material || "Spool " + spool.id),
@@ -389,6 +392,16 @@ function spoolList(spools, activeId) {
     return a.lastUsed < b.lastUsed ? 1 : a.lastUsed > b.lastUsed ? -1 : a.id - b.id
   })
   return out
+}
+
+// AFC's per-lane Spoolman assignment; id < 0 clears the lane. "" when the
+// lane name or id isn't safe to put in G-code.
+function afcSpoolCommand(lane, id) {
+  var name = String(lane || "")
+  if (!/^[A-Za-z0-9_.-]+$/.test(name)) return ""
+  var n = Number(id)
+  if (n < 0) return "SET_SPOOL_ID LANE=" + name
+  return n === Math.floor(n) ? "SET_SPOOL_ID LANE=" + name + " SPOOL_ID=" + n : ""
 }
 
 // Body for POST /server/spoolman/proxy.
@@ -447,7 +460,7 @@ function escapeMarkup(text) {
 var AFC_FIELDS = ["current_load", "current_lane", "next_lane", "current_state", "current_toolchange",
                   "number_of_toolchanges", "error_state", "message", "lanes", "units", "bypass_state"]
 var AFC_LANE_FIELDS = ["lane", "map", "load", "prep", "tool_loaded", "material", "color", "filament_name",
-                       "multi_color_hexes", "weight", "status"]
+                       "multi_color_hexes", "weight", "status", "spool_id"]
 // Lane object types, preferred first. Unknown AFC_* types with the lane's
 // name are accepted too, except the unit objects (which can share it).
 var AFC_LANE_TYPES = ["AFC_lane", "AFC_stepper", "AFC_hybrid_stepper"]
@@ -529,7 +542,8 @@ function afcState(status, laneObjects) {
       weight: Number(l.weight) || 0,
       ready: l.load === true && l.prep === true,
       loaded: name === afc.current_load,
-      status: l.status && l.status !== "None" ? String(l.status) : ""
+      status: l.status && l.status !== "None" ? String(l.status) : "",
+      spoolId: l.spool_id === null || l.spool_id === undefined || l.spool_id === "" ? -1 : Number(l.spool_id)
     })
   }
   var state = String(afc.current_state || "")

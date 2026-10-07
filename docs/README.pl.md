@@ -34,9 +34,9 @@ i Canvas, Voron, RatRig, Creality K-series z Klipperem i innymi.
 - **Powiadomienia** na pulpicie: koniec wydruku, pauza (np. koniec filamentu),
   błąd, „zostało 10 minut” oraz błędy Klippera i zmieniacza filamentu, ze
   zdjęciem z kamery, żeby od razu widzieć gotowy model albo problem.
-- **Spoolman**: jedna linia z aktywną szpulą, jej kolorem i pozostałymi gramami;
-  kliknięcie pozwala wybrać inną szpulę. Widoczne tylko, gdy Moonraker ma
-  skonfigurowany Spoolman.
+- **Spoolman** (w Tools, gdy Moonraker ma skonfigurowany Spoolman): aktywna
+  szpula z kolorem i pozostałymi gramami oraz lista do zmiany szpuli. Przy AFC
+  osobny wiersz dla każdego toru, żeby przypisać lub usunąć jego szpulę.
 - **Sterowanie**: pauza, wznowienie i anulowanie. Anulowanie trzeba kliknąć drugi raz, żeby potwierdzić.
 - **Narzędzia wydruku** (przycisk Tools albo klawisz `t`): pauza na
   wybranej warstwie albo po bieżącej (między wydrukami: dla następnego wydruku), np. żeby włożyć magnesy (wymaga standardowych

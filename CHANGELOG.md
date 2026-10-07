@@ -7,6 +7,11 @@
   "Next print pauses at layer N" under the title until it fires or is
   cleared. Sections that don't apply (no layers, a single object, missing
   macros) show a short note instead of disappearing.
+- Spoolman moved into Tools, which keeps the main popup lighter. On AFC
+  printers it now lists every lane, to assign or clear that lane's Spoolman
+  spool (`SET_SPOOL_ID`); spools already on another lane are marked. Spool
+  names no longer repeat the brand when the filament name starts with it.
+  IPC: `setLaneSpool`.
 
 ## 0.2.0 — 2026-10-07
 

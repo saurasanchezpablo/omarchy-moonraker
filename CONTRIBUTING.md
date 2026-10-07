@@ -42,7 +42,7 @@ omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http
 - By default the fake job gets synthesized metadata and `dev/assets/thumbnail.png`.
 - `--upstream`/`--api-key`/`--file`: proxy file metadata and thumbnails to a real printer instead.
 - `--require-key`: reject requests without this key (tests the auth states).
-- `--spoolman`: simulate Moonraker's Spoolman integration with three spools (one multi-color).
+- `--spoolman`: simulate Moonraker's Spoolman integration with three spools (one multi-color); with `--afc`, lanes accept `SET_SPOOL_ID`.
 - `--afc`: simulate a 4-lane Elegoo Canvas (AFC). The `toolchange-unload`,
   `toolchange-load`, and `toolchange-resume` scenarios show change 3 of 12 from T0 to T2.
 - A webcam named "Mock Cam" serves `dev/assets/webcam.jpg`; `--webcam` picks another JPEG, `--no-webcam` reports none.
@@ -115,7 +115,8 @@ Requirements: `grim`, `jq`, `python-pillow`, and a horizontal bar at the top.
 - [ ] Tools → pause at a layer two layers ahead: the print pauses there, and "Pauses at" disappears afterwards
 - [ ] Idle: Tools → pause the next print at layer 3; the note shows under the title, and the next print pauses at layer 3
 - [ ] Tools on a multi-object plate: skipping an object needs a second click, then it shows as skipped and the printer leaves it out
-- [ ] With Spoolman: the spool line shows the active spool; picking another one switches it in Mainsail too
+- [ ] With Spoolman: Tools shows the active spool; picking another one switches it in Mainsail too
+- [ ] With Spoolman and AFC: Tools lists every lane; assigning a spool to a lane updates the lane card, and spools on other lanes are marked
 - [ ] The bulb on the camera switches the chamber light and shows its state
 - [ ] A finished print, a filament-runout pause, and a Klipper shutdown each send one notification; pausing from the popup doesn't
 - [ ] With an AFC changer: every lane shows its color, tool, and material, the loaded one is highlighted, and a tool change walks through Unload → Load → Resume with the right old and new filament

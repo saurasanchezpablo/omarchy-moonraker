@@ -39,9 +39,11 @@ RatRig, Creality K-series with Klipper, and others.
   toolhead, and a live view of tool changes: old → new filament, unload / load /
   resume, and "change 3 of 12" during multi-color prints. The bar chip shows the
   target tool while a change runs
-- **Spoolman**: one line with the active spool, its color, and the grams left.
-  Click it to pick another spool, so Moonraker tracks usage on the right one.
-  Shown only when Moonraker has Spoolman set up (AFC printers show spools in the lanes)
+- **Spoolman** (in Tools, when Moonraker has Spoolman set up): the active
+  spool with its color and grams left, and a picker to switch it so usage is
+  tracked on the right spool. On AFC printers, one row per lane to assign or
+  clear each lane's spool (AFC's `SET_SPOOL_ID`); spools already on another
+  lane are marked
 - **Controls**: pause, resume, and cancel (cancel asks you to confirm)
 - **Print tools** (the Tools button, or `t`):
   - pause at a chosen layer or after the current one, e.g. to drop in magnets
@@ -208,6 +210,7 @@ omarchy-shell io.github.saurasanchezpablo.moonraker-plus pauseAtLayer 120 # paus
 omarchy-shell io.github.saurasanchezpablo.moonraker-plus skipObject NAME # skip one object of the running print
 omarchy-shell io.github.saurasanchezpablo.moonraker-plus showTools       # open the popup on the print tools
 omarchy-shell io.github.saurasanchezpablo.moonraker-plus setSpool 12     # make Spoolman spool 12 active ("none" clears)
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus setLaneSpool CANVAS_2 12  # AFC: put spool 12 on a lane ("none" clears)
 omarchy-shell io.github.saurasanchezpablo.moonraker-plus status          # JSON snapshot (never includes the API key)
 omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http://printer","display":"full"}'
 ```
@@ -231,8 +234,8 @@ omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http
     "loaded": "CANVAS_1", "state": "Idle", "changing": false, "from": "", "to": "", "step": "",
     "toolchange": 0, "toolchanges": 0, "error": false, "message": "",
     "lanes": [
-      {"name": "CANVAS_1", "tool": "T0", "material": "PETG", "color": "#212121", "weight": 980.4, "ready": true, "loaded": true},
-      {"name": "CANVAS_2", "tool": "T1", "material": "TPU", "color": "#ffffff", "weight": 0, "ready": true, "loaded": false}
+      {"name": "CANVAS_1", "tool": "T0", "material": "PETG", "color": "#212121", "weight": 980.4, "ready": true, "loaded": true, "spoolId": 1},
+      {"name": "CANVAS_2", "tool": "T1", "material": "TPU", "color": "#ffffff", "weight": 0, "ready": true, "loaded": false, "spoolId": -1}
     ]
   },
   "camera": {
@@ -263,7 +266,8 @@ The real output is a single line.
 | No filament section | The printer has no [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) object. Happy Hare / ERCF and other changers aren't supported yet. |
 | Lane weight missing | AFC doesn't know it: set the spool weight in AFC or Spoolman. |
 | Tools only shows notes | The printer lacks the `SET_PAUSE_AT_LAYER`/`SET_PAUSE_NEXT_LAYER` macros (they come with Mainsail's and Fluidd's configs) and `[exclude_object]`, or the running print doesn't report layers (`SET_PRINT_STATS_INFO`) or has a single object. |
-| No spool line | Moonraker has no `[spoolman]` section, or the printer has an AFC changer (its lanes show the spools). *Spoolman not connected* means Moonraker can't reach the Spoolman server. |
+| No Spool section in Tools | Moonraker has no `[spoolman]` section. *Moonraker can't reach the Spoolman server* means the section exists but the server is down or unreachable. |
+| A lane won't take a spool | AFC refuses a spool that is already on another lane; clear it there first. AFC also needs its own `spoolman_ip` set. |
 | No camera | No enabled webcam is set up in Mainsail/Fluidd, or its service only streams (WebRTC, HLS) and has no snapshot URL. |
 | *HTTP 302 → …* under the camera | The snapshot URL redirects to another host. The widget only follows redirects that stay on the printer's host, so set the webcam's snapshot URL to the final address. |
 

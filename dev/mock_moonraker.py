@@ -74,7 +74,7 @@ ABUSE = {
 args = None
 scenario = {"name": "printing"}
 # State changed by G-code sent through /printer/gcode/script.
-machine = {"spool_id": 3, "light": 1.0, "pause_next": False, "pause_at": 0, "excluded": []}
+machine = {"spool_id": 3, "lane_spools": {"CANVAS_1": 3}, "light": 1.0, "pause_next": False, "pause_at": 0, "excluded": []}
 # Spoolman inventory (--spoolman), served through Moonraker's proxy.
 SPOOLS = [
     {"id": 3, "remaining_weight": 642.5, "archived": False, "last_used": "2026-10-06T18:00:00Z",
@@ -229,6 +229,7 @@ class Handler(BaseHTTPRequestHandler):
                 "tool_loaded": name == loaded, "material": material, "color": color,
                 "filament_name": "", "multi_color_hexes": [], "weight": grams,
                 "status": lane_status if name == moving else "None",
+                "spool_id": machine["lane_spools"].get(name),
             }
         return out
 
@@ -357,6 +358,12 @@ class Handler(BaseHTTPRequestHandler):
         elif words and words[0] == "EXCLUDE_OBJECT" and params.get("NAME") in MOCK_OBJECTS:
             if params["NAME"] not in machine["excluded"]:
                 machine["excluded"].append(params["NAME"])
+        elif words and words[0] == "SET_SPOOL_ID" and params.get("LANE") in [l[0] for l in AFC_LANES]:
+            lane, spool = params["LANE"], params.get("SPOOL_ID", "")
+            if spool == "":
+                machine["lane_spools"].pop(lane, None)
+            elif int(spool) not in [v for k, v in machine["lane_spools"].items() if k != lane]:
+                machine["lane_spools"][lane] = int(spool)   # AFC refuses a spool held by another lane
         elif words and words[0] == "SET_PAUSE_NEXT_LAYER":
             machine["pause_next"] = params.get("ENABLE", "1") != "0"
         return "ok"
