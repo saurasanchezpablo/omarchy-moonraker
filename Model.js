@@ -61,9 +61,33 @@ function normalizeUrl(raw) {
 }
 
 // "scheme://host[:port]", lowercased; "" for anything that isn't http(s).
+// Strict parse of an http(s) URL's authority, or null. Every same-host and
+// same-origin decision goes through here, so it refuses anything another
+// parser (curl's) could read differently: several "@", backslashes, spaces,
+// or unusual host characters.
+//   { scheme, user, host, port, explicitPort, origin }
+function parseUrl(url) {
+  var m = String(url || "").match(/^(https?):\/\/([^\/?#]*)/i)
+  if (!m || /[\\\s]/.test(m[2])) return null
+  var auth = m[2]
+  var at = auth.indexOf("@")
+  if (at !== auth.lastIndexOf("@")) return null
+  var user = at >= 0 ? auth.slice(0, at) : ""
+  var hm = auth.slice(at + 1).match(/^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::(\d{1,5}))?$/)
+  if (!hm) return null
+  var scheme = m[1].toLowerCase()
+  var host = hm[1].toLowerCase()
+  var port = hm[2] ? Number(hm[2]) : (scheme === "https" ? 443 : 80)
+  return {
+    scheme: scheme, user: user, host: host, port: port, explicitPort: !!hm[2],
+    origin: scheme + "://" + host + ":" + port
+  }
+}
+
+// "scheme://host:port" (default ports spelled out), "" when unparsable.
 function urlOrigin(url) {
-  var m = String(url || "").match(/^(https?:\/\/[^\/?#]+)/i)
-  return m ? m[1].toLowerCase() : ""
+  var p = parseUrl(url)
+  return p ? p.origin : ""
 }
 
 function sameOrigin(a, b) {
@@ -72,13 +96,13 @@ function sameOrigin(a, b) {
 }
 
 function sameHost(a, b) {
-  var h = hostLabel(a).toLowerCase()
-  return h !== "" && h === hostLabel(b).toLowerCase()
+  var pa = parseUrl(a), pb = parseUrl(b)
+  return !!pa && !!pb && pa.host === pb.host
 }
 
 function hostLabel(url) {
-  var m = String(url || "").match(/^https?:\/\/([^\/:]+)/i)
-  return m ? m[1] : ""
+  var p = parseUrl(url)
+  return p ? p.host : ""
 }
 
 function normalizeDisplay(value) {
@@ -652,13 +676,13 @@ function snapshotCandidates(baseUrl, snapshot) {
   var snap = String(snapshot || "")
   if (/^https?:\/\//i.test(snap)) return [snap]
   if (/^[a-z][a-z0-9+.-]*:/i.test(snap)) return []   // rtsp:, webrtc:, …
-  var origin = urlOrigin(baseUrl)
-  if (origin === "" || snap === "") return []
+  var p = parseUrl(baseUrl)
+  if (!p || snap === "") return []
   var path = snap.charAt(0) === "/" ? snap : "/" + snap
-  var out = [origin + path]
-  var portless = origin.replace(/:\d+$/, "")
-  if (portless !== origin) out.push(portless + path)
-  return out
+  var userinfo = p.user !== "" ? p.user + "@" : ""
+  var portless = p.scheme + "://" + userinfo + p.host
+  if (!p.explicitPort) return [portless + path]
+  return [portless + ":" + p.port + path, portless + path]
 }
 
 // A URL safe to show in `status`: no user:password@.
