@@ -67,6 +67,7 @@ until it crashes. curl closes the connection when a limit is hit.
 | Popup open, when the job has a thumbnail | `GET /server/files/gcodes/<thumb>`, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/` and shown from there |
 | Pause / Resume / Cancel | `POST /printer/print/pause`, `/resume`, `/cancel` |
 | Popup open | `GET /server/webcams/list`: webcams configured in Mainsail/Fluidd |
+| Light button | `POST /printer/gcode/script?script=SET_LED …` or `SET_PIN …` |
 | While the popup is open | `GET <snapshot_url>`, one frame at a time, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/camera-{0,1}` |
 
 
@@ -136,6 +137,19 @@ whose type depends on the hardware: `AFC_lane CANVAS_1`, `AFC_stepper lane1`, �
 AFC forgets the old lane once it is unloaded, so the widget remembers which lane
 was loaded when the change started (`changeOrigin`) to keep showing "T0 → T2".
 While a change runs and the popup is open, polling speeds up to once a second.
+
+### Chamber light
+
+`Model.pickLight()` chooses from the object list: `led`, `neopixel`, `dotstar`,
+and `pca95xx` objects named like a case or chamber light first, then ones named
+"light"/"lamp", then any other LED that isn't obviously the toolhead or a
+status display. An `output_pin` only qualifies by name, because pins also drive
+beepers and heaters. The `lightObject` setting overrides the choice.
+
+The light's `color_data` (or `value`) joins the status query, and the button
+sends `SET_LED LED=<name> RED=1 GREEN=1 BLUE=1 WHITE=1` (channels the LED
+doesn't have are ignored) or `SET_PIN PIN=<name> VALUE=1`. Object names are
+checked against `[A-Za-z0-9_.-]` before they go into G-code.
 
 ### Notifications
 

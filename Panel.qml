@@ -65,6 +65,10 @@ Panel {
   property var afcObjects: []
   property var afcLaneObjects: ({})
   property string afcLanesKey: ""
+  // Chamber light (Model.pickLight) and whether it is on.
+  property var light: null
+  property bool lightOn: false
+  property bool lightBusy: false
   property var afc: null
   // Lane loaded when the current change started; AFC forgets it once unloaded.
   property string changeOrigin: ""
@@ -285,6 +289,7 @@ Panel {
       return
     }
     var extra = afcObjects.length > 0 ? Model.afcQuery(afcLaneObjects) : []
+    if (light) extra.push(encodeURIComponent(light.object) + "=" + (light.kind === "pin" ? "value" : "color_data"))
     inflight = request("GET", Model.queryPath(chamberObject, extra), function(err, result) {
       root.inflight = null
       if (err) {
@@ -315,6 +320,7 @@ Panel {
       }
       var objects = Model.toArray(result ? result.objects : []) || []
       root.chamberObject = Model.pickChamberObject(objects, root.setting("chamberObject", ""))
+      root.light = Model.pickLight(objects, root.setting("lightObject", ""))
       root.afcObjects = objects.indexOf("AFC") >= 0
         ? objects.filter(function(o) { return String(o).indexOf("AFC_") === 0 }) : []
       root.objectsProbed = true
@@ -359,6 +365,8 @@ Panel {
         Qt.callLater(poll)
       }
     }
+    if (light && !lightBusy) lightOn = Model.lightIsOn(light, status)
+
     var prevAfc = afc
     afc = Model.afcState(status, afcLaneObjects)
     if (!afc || !afc.changing) changeOrigin = ""
@@ -594,6 +602,8 @@ Panel {
     afc = null
     changeOrigin = ""
     lastSnapshot = null
+    light = null
+    lightOn = false
     thumbnailSource = ""
     thumbnailFor = ""
     webcams = []
@@ -609,6 +619,21 @@ Panel {
     request("POST", "/printer/print/" + action, function(err) {
       root.actionBusy = false
       if (err) root.lastError = err.message
+      root.poll()
+    })
+  }
+
+  function toggleLight() {
+    var cmd = Model.lightCommand(light, !lightOn)
+    if (cmd === "" || lightBusy) return
+    lightBusy = true
+    lightOn = !lightOn
+    request("POST", Model.gcodePath(cmd), function(err) {
+      root.lightBusy = false
+      if (err) {
+        root.lightOn = !root.lightOn
+        root.lastError = err.message
+      }
       root.poll()
     })
   }
@@ -721,12 +746,13 @@ Panel {
     function toggle(): void { root.toggle() }
     function refresh(): void { root.poll() }
     function cycleDisplay(): void { root.cycleDisplay() }
+    function toggleLight(): void { root.toggleLight() }
     // Merge settings from a JSON object, e.g. '{"url":"http://printer","display":"full"}'.
     function configure(json: string): string {
       var patch
       try { patch = JSON.parse(json) } catch (e) { return "invalid JSON" }
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "expected a JSON object"
-      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot"]
+      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot", "lightObject"]
       var clean = {}
       for (var k in patch) {
         if (allowed.indexOf(k) < 0) return "unknown setting: " + k
@@ -745,6 +771,7 @@ Panel {
         configured: root.configured, online: root.online, state: root.printState,
         auth: !root.authFailed, klippy: root.klippyState, file: root.filename, progress: root.progress,
         remaining: root.remaining, temps: root.temps, error: root.lastError,
+        light: root.light ? { object: root.light.object, on: root.lightOn } : null,
         filament: root.afc === null ? null : {
           loaded: root.afc.loaded, state: root.afc.state, changing: root.changing,
           from: root.changeFrom ? root.changeFrom.name : "", to: root.changeTo ? root.changeTo.name : "",
@@ -827,6 +854,7 @@ Panel {
         if (t === "r") root.poll()
         else if (t === "s") root.settingsOpen = !root.settingsOpen
         else if (t === "o") root.openWebUi()
+        else if (t === "l") root.toggleLight()
       }
 
       Column {
@@ -1136,6 +1164,36 @@ Panel {
             enabled: root.webcams.length > 1
             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
             onClicked: root.cycleWebcam()
+          }
+
+          // Chamber light switch, over the picture's top-right corner.
+          Rectangle {
+            visible: root.light !== null
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: Style.space(8)
+            width: Style.space(30)
+            height: width
+            radius: width / 2
+            color: lightArea.containsMouse ? Qt.rgba(0, 0, 0, 0.75) : Qt.rgba(0, 0, 0, 0.55)
+            opacity: root.lightBusy ? 0.6 : 1
+
+            Text {
+              anchors.centerIn: parent
+              textFormat: Text.PlainText
+              text: root.lightOn ? Model.ICONS.lightOn : Model.ICONS.lightOff
+              color: root.lightOn ? "#ffd54f" : "white"
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+            }
+
+            MouseArea {
+              id: lightArea
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.toggleLight()
+            }
           }
         }
 

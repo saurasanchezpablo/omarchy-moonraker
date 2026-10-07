@@ -22,6 +22,7 @@ import json
 import os
 import secrets
 import time
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -72,6 +73,9 @@ ABUSE = {
 
 args = None
 scenario = {"name": "printing"}
+# State changed by G-code sent through /printer/gcode/script.
+machine = {"light": 1.0}
+gcode_log = []
 tokens = set()
 
 
@@ -238,6 +242,7 @@ class Handler(BaseHTTPRequestHandler):
             "extruder": {"temperature": nozzle, "target": targets[0]},
             "heater_bed": {"temperature": bed, "target": targets[1]},
             "heater_generic chamber": {"temperature": chamber, "target": targets[2]},
+            "led case": {"color_data": [[0.0, 0.0, 0.0, machine["light"]]]},
             **(self.afc_status() if args.afc else {}),
         }
 
@@ -255,7 +260,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(token)
         elif path == "/printer/objects/list":
             objects = ["print_stats", "virtual_sdcard", "display_status", "extruder",
-                       "heater_bed", "webhooks", "heater_generic chamber"]
+                       "heater_bed", "webhooks", "heater_generic chamber", "led case", "led hotend"]
             if args.afc:
                 objects += ["AFC", "AFC_canvas CANVAS_1", "AFC_hub toolhead_4way_hub", "AFC_extruder extruder"]
                 objects += ["AFC_lane " + l[0] for l in AFC_LANES] + ["AFC_canvas_lane " + l[0] for l in AFC_LANES]
@@ -277,6 +282,16 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def gcode(self, script):
+        """The few commands the widget sends; everything else is just logged."""
+        gcode_log.append(script)
+        print(f"[mock] gcode: {script}", flush=True)
+        words = script.split()
+        params = dict(w.split("=", 1) for w in words[1:] if "=" in w)
+        if words and words[0] == "SET_LED" and params.get("LED") == "case":
+            machine["light"] = float(params.get("WHITE", 0))
+        return "ok"
+
     def do_POST(self):
         path = self.path.split("?")[0]
         if path.startswith("/mock/scenario/"):
@@ -295,6 +310,10 @@ class Handler(BaseHTTPRequestHandler):
             "/printer/print/resume": ("paused", "printing"),
             "/printer/print/cancel": (None, "cancelled"),
         }
+        if path == "/printer/gcode/script":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            self.send_json(self.gcode(query.get("script", [""])[0]))
+            return
         if path in transitions:
             want, nxt = transitions[path]
             current = SCENARIOS[scenario["name"]][0]

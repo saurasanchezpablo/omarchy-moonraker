@@ -32,7 +32,8 @@
       "webcam": "",
       "showFilament": true,
       "notify": true,
-      "notifySnapshot": true
+      "notifySnapshot": true,
+      "lightObject": ""
     },
     "schema": [
       {
@@ -138,6 +139,13 @@
         "label": "Camera snapshot in notifications",
         "description": "Attach a webcam picture to notifications, so you can see the finished part or the problem.",
         "defaultValue": true
+      },
+      {
+        "key": "lightObject",
+        "type": "string",
+        "label": "Chamber light object",
+        "description": "Klipper object for the light button on the camera, e.g. 'led case' or 'output_pin caselight'. Auto-detected when empty.",
+        "defaultValue": ""
       }
     ]
   }

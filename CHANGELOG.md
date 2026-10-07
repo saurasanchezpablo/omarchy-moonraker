@@ -6,6 +6,9 @@
   (e.g. filament runout), or has 10 minutes left, and when Klipper or the
   filament changer stops with an error. Pause/cancel from the popup stays
   quiet. Setting: `notify` (also a toggle in the popup).
+- New: a bulb on the camera picture switches the chamber light (also `l` in
+  the popup and the `toggleLight` IPC call). The light is detected from the
+  printer's LED objects; setting: `lightObject`.
 - New: notifications carry a camera snapshot of the printer, so a finished
   part or a failed print is visible right in the notification. Setting:
   `notifySnapshot`.

@@ -18,7 +18,7 @@ K-series z Klipperem i innymi.
   - czas wydruku, czas do końca i godzina zakończenia,
   - warstwa i zużyty filament,
   - temperatury: aktualna i docelowa,
-  - podgląd z kamery drukarki (ustawionej w Mainsail/Fluidd), odświeżany mniej więcej co sekundę i tylko przy otwartym popupie.
+  - podgląd z kamery drukarki (ustawionej w Mainsail/Fluidd), odświeżany mniej więcej co sekundę i tylko przy otwartym popupie; żarówka w rogu obrazu włącza i wyłącza oświetlenie komory (klawisz `l`).
 - **Zmieniacz filamentu** (AFC: Elegoo Canvas, Box Turtle, Night Owl, …): wszystkie
   tory z kolorem, narzędziem, materiałem i pozostałą wagą, informacja, który
   filament jest w głowicy, oraz podgląd zmiany na żywo: stary → nowy filament,
@@ -84,6 +84,7 @@ Zapisują się we wpisie widgetu w `~/.config/omarchy/shell.json`:
 | `showCamera` | pokazuj kamerę drukarki w popupie (domyślnie tak); przełącznik jest w ustawieniach, gdy drukarka ma kamerę |
 | `notify` | powiadomienia na pulpicie (przez `notify-send`), domyślnie włączone |
 | `notifySnapshot` | dołączaj do powiadomień zdjęcie z kamery (domyślnie tak) |
+| `lightObject` | obiekt Klippera z oświetleniem komory, np. `led case`; pusty oznacza automatyczne wykrywanie |
 | `showFilament` | pokazuj tory zmieniacza filamentu i zmiany narzędzia (domyślnie tak); działa tylko z [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) |
 | `webcam` | nazwa kamery z Mainsail/Fluidd; pusta oznacza pierwszą. Przy kilku kamerach kliknięcie obrazu przełącza na następną |
 

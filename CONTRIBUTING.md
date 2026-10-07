@@ -111,6 +111,7 @@ Requirements: `grim`, `jq`, `python-pillow`, and a horizontal bar at the top.
 - [ ] Cancel: the first click arms, the second click within 3 s cancels
 - [ ] Right click cycles the styles and survives `omarchy restart shell`
 - [ ] Middle click opens the web UI
+- [ ] The bulb on the camera switches the chamber light and shows its state
 - [ ] A finished print, a filament-runout pause, and a Klipper shutdown each send one notification; pausing from the popup doesn't
 - [ ] With an AFC changer: every lane shows its color, tool, and material, the loaded one is highlighted, and a tool change walks through Unload → Load → Resume with the right old and new filament
 - [ ] The camera shows within a couple of seconds of opening the popup, updates about once a second, and stops when the popup closes (`status` → `camera.streaming: false`)

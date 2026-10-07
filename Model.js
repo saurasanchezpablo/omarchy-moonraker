@@ -45,7 +45,9 @@ var ICONS = {
   cog: "\u{F0493}",       // nf-md-cog
   refresh: "\u{F0450}",   // nf-md-refresh
   camera: "\u{F0100}",    // nf-md-camera
-  swap: "\u{F04E1}"       // nf-md-swap_horizontal
+  swap: "\u{F04E1}",      // nf-md-swap_horizontal
+  lightOn: "\u{F0335}",   // nf-md-lightbulb
+  lightOff: "\u{F0336}"   // nf-md-lightbulb_outline
 }
 
 function normalizeUrl(raw) {
@@ -229,6 +231,67 @@ function thumbnailPath(filename, metadata) {
   var slash = file.lastIndexOf("/")
   var dir = slash >= 0 ? file.slice(0, slash + 1) : ""
   return dir + best.relative_path
+}
+
+// ---------- Chamber light ----------
+
+var LED_TYPES = ["led", "neopixel", "dotstar", "pca9533", "pca9632"]
+
+// The printer's case/chamber light as { object, kind: "led" | "pin" }, or
+// null. LEDs named like the toolhead or a status display are skipped; an
+// output_pin only counts when its name says it's a light, since pins also
+// drive beepers and heaters. `override` is the lightObject setting.
+function pickLight(objects, override) {
+  var list = toArray(objects) || []
+  var o = String(override || "").trim()
+  if (o !== "") return lightKind(o) ? { object: o, kind: lightKind(o) } : null
+  var best = null, bestRank = 99
+  for (var i = 0; i < list.length; i++) {
+    var obj = String(list[i])
+    var kind = lightKind(obj)
+    if (!kind) continue
+    var name = obj.slice(obj.indexOf(" ") + 1).toLowerCase()
+    var rank
+    if (/chamber|case|cabinet|enclosure|frame/.test(name)) rank = 0
+    else if (/light|lamp/.test(name)) rank = 1
+    else if (kind === "pin" || /hotend|nozzle|toolhead|tool|status|logo|knob|display|extruder|bed/.test(name)) continue
+    else rank = 2
+    if (rank < bestRank) { best = { object: obj, kind: kind }; bestRank = rank }
+  }
+  return best
+}
+
+function lightKind(obj) {
+  var m = String(obj).match(/^(\S+) ([A-Za-z0-9_.-]+)$/)
+  if (!m) return ""
+  if (LED_TYPES.indexOf(m[1]) >= 0) return "led"
+  if (m[1] === "output_pin") return "pin"
+  return ""
+}
+
+function lightIsOn(light, status) {
+  var s = light && status ? status[light.object] : null
+  if (!s) return false
+  if (light.kind === "pin") return Number(s.value) > 0
+  var data = toArray(s.color_data) || []
+  for (var i = 0; i < data.length; i++) {
+    var px = toArray(data[i]) || []
+    for (var j = 0; j < px.length; j++) if (Number(px[j]) > 0) return true
+  }
+  return false
+}
+
+// G-code that switches the light; "" if the object name isn't safe to send.
+function lightCommand(light, on) {
+  if (!light || !lightKind(light.object)) return ""
+  var name = light.object.slice(light.object.indexOf(" ") + 1)
+  var v = on ? 1 : 0
+  if (light.kind === "pin") return "SET_PIN PIN=" + name + " VALUE=" + v
+  return "SET_LED LED=" + name + " RED=" + v + " GREEN=" + v + " BLUE=" + v + " WHITE=" + v
+}
+
+function gcodePath(script) {
+  return "/printer/gcode/script?script=" + encodeURIComponent(script)
 }
 
 // ---------- Notifications ----------

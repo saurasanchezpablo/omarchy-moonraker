@@ -16,7 +16,8 @@ Qidi (tested on a Q2), Voron, RatRig, Creality K-series with Klipper, and others
 - **Bar chip** in three styles: icon only, progress + time left, or progress + temperatures
 - **Detail popup**: thumbnail, elapsed/remaining time, finish time, layer, filament, live temperatures
 - **Printer camera** in the popup, from the webcam set up in Mainsail/Fluidd. It
-  refreshes about once a second and only while the popup is open, so nothing runs in the background
+  refreshes about once a second and only while the popup is open, so nothing runs in the background.
+  A bulb in its corner switches the chamber light (`l` in the popup)
 - **Filament changer** (AFC: Elegoo Canvas, Box Turtle, Night Owl, …): every
   lane with its color, tool, material, and remaining weight, which one is in the
   toolhead, and a live view of tool changes: old → new filament, unload / load /
@@ -85,7 +86,7 @@ but keeps the folder.
 | Left click    | Open or close the detail popup |
 | Right click   | Cycle the bar style: icon → progress → progress + temps |
 | Middle click  | Open the printer's web UI (Mainsail/Fluidd) in your browser |
-| `r` / `s` / `o` in the popup | Refresh / toggle settings / open the web UI |
+| `r` / `s` / `o` / `l` in the popup | Refresh / toggle settings / open the web UI / switch the chamber light |
 | `Esc`         | Close the popup |
 
 ### Bar styles
@@ -123,7 +124,8 @@ The Settings section in the popup writes these values to the widget's entry in
   "webcam": "",
   "showFilament": true,
   "notify": true,
-  "notifySnapshot": true
+  "notifySnapshot": true,
+  "lightObject": ""
 }
 ```
 
@@ -142,6 +144,7 @@ The Settings section in the popup writes these values to the widget's entry in
 | `webcam`          | first one           | Name of the webcam to show, as set in Mainsail/Fluidd. With several webcams, click the picture to switch. |
 | `notify`          | `true`              | Desktop notifications (through `notify-send`) for finished, paused, failed, and almost-done prints, and Klipper or filament changer errors. |
 | `notifySnapshot`  | `true`              | Attach a webcam picture to notifications (not to "10 minutes left"). |
+| `lightObject`     | auto                | Klipper object for the light button, e.g. `led case`, `neopixel chamber`, or `output_pin caselight`. Auto-detected from LED objects named like a case/chamber light; an `output_pin` is only picked when its name contains "light" or "lamp". |
 | `showFilament`    | `true`              | Show the filament changer's lanes and tool changes. Only has an effect on printers with [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On). |
 
 The API key is stored in plain text in `shell.json`, like every other Omarchy widget setting.
@@ -153,6 +156,7 @@ omarchy-shell io.github.prodpixa.moonraker toggle          # open/close the popu
 omarchy-shell io.github.prodpixa.moonraker showSettings    # open the popup on the settings form
 omarchy-shell io.github.prodpixa.moonraker refresh         # poll now
 omarchy-shell io.github.prodpixa.moonraker cycleDisplay    # next bar style
+omarchy-shell io.github.prodpixa.moonraker toggleLight     # chamber light on/off
 omarchy-shell io.github.prodpixa.moonraker status          # JSON snapshot (never includes the API key)
 omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","display":"full"}'
 ```
@@ -168,6 +172,7 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","d
     "bed": {"key": "bed", "temperature": 60.1, "target": 60}
   },
   "error": "",
+  "light": {"object": "led case", "on": true},
   "filament": {
     "loaded": "CANVAS_1", "state": "Idle", "changing": false, "from": "", "to": "", "step": "",
     "toolchange": 0, "toolchanges": 0, "error": false, "message": "",
