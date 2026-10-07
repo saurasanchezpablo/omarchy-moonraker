@@ -58,15 +58,19 @@ Panel {
   property var temps: ({})
   property var fileMeta: null
   property string metaFor: ""
-  property string chamberObject: ""
+  // Klipper's object list, probed once per connection and again whenever
+  // Klipper becomes ready (a restart can load a different config).
+  property var printerObjects: []
   property bool objectsProbed: false
+  // Derived, so the chamberObject/lightObject settings apply without a restart.
+  readonly property string chamberObject: Model.pickChamberObject(printerObjects, setting("chamberObject", ""))
   // Filament changer (AFC): every AFC_* object, the lane -> object map once
   // the AFC object has listed its lanes, and the reduced state (Model.afcState).
   property var afcObjects: []
   property var afcLaneObjects: ({})
   property string afcLanesKey: ""
   // Chamber light (Model.pickLight) and whether it is on.
-  property var light: null
+  readonly property var light: Model.pickLight(printerObjects, setting("lightObject", ""))
   property bool lightOn: false
   property bool lightBusy: false
   // Pause at layer: whether the printer has the macros, and the plan.
@@ -140,14 +144,15 @@ Panel {
   readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR")
     || (Quickshell.env("HOME") + "/.cache")) + "/omarchy-moonraker-plus"
 
-  readonly property bool printing: online && Model.isActiveState(printState)
+  // Klipper down means no print can be controlled, whatever print_stats said last.
+  readonly property bool printing: online && klippyReady && Model.isActiveState(printState)
   readonly property real remaining: printing
     ? Model.remainingSeconds(printDuration, progress, fileMeta ? fileMeta.estimated_time : 0)
     : -1
   readonly property bool finished: online && filename !== ""
     && (printState === "complete" || printState === "cancelled" || printState === "error")
   readonly property bool klippyReady: klippyState === "" || klippyState === "ready"
-  readonly property bool changing: online && afc !== null && afc.changing
+  readonly property bool changing: online && klippyReady && afc !== null && afc.changing
   readonly property var changeFrom: changing ? Model.afcLane(afc, changeOrigin) : null
   readonly property var changeTo: changing ? Model.afcLane(afc, afc.target || afc.moving) : null
 
@@ -201,6 +206,7 @@ Panel {
     if (!configured) return "Not configured"
     if (authFailed) return "Unauthorized"
     if (!online) return everConnected ? "Offline" : (lastError ? "Unreachable" : "Connecting…")
+    if (!klippyReady) return Model.stateLabel("", klippyState)
     if (changing) return "Changing filament"
     if (heating) return "Heating"
     return Model.stateLabel(printState, klippyState)
@@ -340,34 +346,37 @@ Panel {
     inflight = request("GET", Model.queryPath(chamberObject, extra), function(err, result) {
       root.inflight = null
       if (err) {
-        // Klippy not ready still means Moonraker is reachable.
-        if (err.status === 503 || (err.message && /klippy/i.test(err.message))) {
-          root.online = true
-          root.everConnected = true
-          root.authFailed = false
-          root.klippyState = "disconnected"
-          root.klippyMessage = ""
-          root.lastError = err.message
-          root.checkNotifications()
-          return
-        }
-        root.markOffline(err)
+        if (!root.markKlippyDown(err)) root.markOffline(err)
         return
       }
       root.applyStatus(result && result.status ? result.status : {})
     })
   }
 
+  // Moonraker answers but Klipper doesn't (503 / "Klippy …"): reachable, not
+  // offline. Returns false for any other error.
+  function markKlippyDown(err) {
+    if (!(err.status === 503 || (err.message && /klippy/i.test(err.message)))) return false
+    online = true
+    everConnected = true
+    authFailed = false
+    klippyState = "disconnected"
+    klippyMessage = ""
+    lastError = err.message
+    temps = ({})   // Klipper reports none now; the last ones would be stale
+    checkNotifications()
+    return true
+  }
+
   function probeObjects() {
     inflight = request("GET", "/printer/objects/list", function(err, result) {
       root.inflight = null
       if (err) {
-        root.markOffline(err)
+        if (!root.markKlippyDown(err)) root.markOffline(err)
         return
       }
-      var objects = Model.toArray(result ? result.objects : []) || []
-      root.chamberObject = Model.pickChamberObject(objects, root.setting("chamberObject", ""))
-      root.light = Model.pickLight(objects, root.setting("lightObject", ""))
+      var objects = (Model.toArray(result ? result.objects : []) || []).slice(0, Model.MAX_PRINTER_OBJECTS)
+      root.printerObjects = objects
       root.pauseMacros = Model.hasPauseMacros(objects)
       root.excludeSupported = objects.indexOf("exclude_object") >= 0
       root.afcObjects = objects.indexOf("AFC") >= 0
@@ -385,7 +394,13 @@ Panel {
 
     var ps = status.print_stats || {}
     var wh = status.webhooks || {}
+    var wasKlippy = klippyState
     klippyState = wh.state ? String(wh.state) : "ready"
+    // Klipper just became ready (restart, config change): probe its objects again.
+    if (klippyState === "ready" && wasKlippy !== "" && wasKlippy !== "ready") {
+      objectsProbed = false
+      Qt.callLater(poll)
+    }
     klippyMessage = klippyState === "ready" ? "" : String(wh.state_message || "")
     printState = String(ps.state || "")
     filename = String(ps.filename || "")
@@ -661,7 +676,7 @@ Panel {
     fileMeta = null
     temps = ({})
     objectsProbed = false
-    chamberObject = ""
+    printerObjects = []
     afcObjects = []
     afcLaneObjects = ({})
     afcLanesKey = ""
@@ -669,7 +684,6 @@ Panel {
     changeOrigin = ""
     lastSnapshot = null
     snapshotBusy = false
-    light = null
     lightOn = false
     pauseMacros = false
     pausePlan = ({ nextLayer: false, atLayer: 0 })

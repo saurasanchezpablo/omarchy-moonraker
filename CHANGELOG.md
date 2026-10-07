@@ -27,6 +27,15 @@
 - Security (development tools): the mock's proxy forwards only file metadata,
   thumbnails, and the webcam, and needs its own test key, so other local
   programs can't use it to read the printer's config with the real key.
+- Fix: hostnames with `_` (e.g. `my_printer`) were rejected by the stricter
+  URL parsing above, so the API key was never sent.
+- Fix: typing a layer and clicking "Pause at this layer" sent the previous
+  value, and each new layer reset the field.
+- Fix: with Klipper down, the popup kept showing the last print with Pause and
+  Cancel, "Heating" or "Changing filament", and stale temperatures; a 503 at
+  start-up showed as *Offline*. The printer's objects (light, chamber, AFC,
+  macros) are probed again whenever Klipper becomes ready, and changing
+  `chamberObject` or `lightObject` applies without a restart.
 
 ## 0.2.1 — 2026-10-07
 

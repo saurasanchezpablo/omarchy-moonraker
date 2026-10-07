@@ -304,6 +304,8 @@ class Handler(BaseHTTPRequestHandler):
             token = secrets.token_hex(16).upper()
             tokens.add(token)
             self.send_json(token)
+        elif path == "/printer/objects/list" and scenario["name"] == "klippy-disconnected":
+            self.send_err(503, "Klippy Disconnected")
         elif path == "/printer/objects/list":
             objects = ["print_stats", "virtual_sdcard", "display_status", "extruder",
                        "heater_bed", "webhooks", "heater_generic chamber", "led case", "led hotend",
