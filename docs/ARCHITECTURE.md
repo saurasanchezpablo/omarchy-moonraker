@@ -144,7 +144,7 @@ While a change runs and the popup is open, polling speeds up to once a second.
 ### Chamber light
 
 `Model.pickLight()` chooses from the object list: `led`, `neopixel`, `dotstar`,
-and `pca95xx` objects named like a case or chamber light first, then ones named
+`pca9533`, and `pca9632` objects named like a case or chamber light first, then ones named
 "light"/"lamp", then any other LED that isn't obviously the toolhead or a
 status display. An `output_pin` only qualifies by name, because pins also drive
 beepers and heaters. The `lightObject` setting overrides the choice.
@@ -261,7 +261,10 @@ contains "chamber" (ignoring thermal-protection sensors).
   through IPC instead (`status` returns the live state).
 - **Editing `shell.json` from outside** rebuilds the whole bar (several seconds).
   The `configure` IPC goes through the shell and applies instantly.
-- The third-party `bar` facade has no `shellQuote()`. The widget quotes the URL itself.
+- The third-party `bar` facade has no `shellQuote()`. The widget doesn't use
+  `bar.run` at all: the web UI opens through `Quickshell.execDetached` with an
+  argument list, and notifications run `notify-send` as an argument list with
+  `--` before the text.
 
 ## Security notes
 

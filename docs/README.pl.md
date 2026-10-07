@@ -123,6 +123,10 @@ omarchy-shell io.github.saurasanchezpablo.moonraker-plus showSettings
 omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"display":"full"}'
 ```
 
+Nie podawaj prawdziwego `apiKey` w `configure`: JSON jest argumentem polecenia,
+więc klucz byłby widoczny na liście procesów i w historii powłoki. Wpisz go
+w ustawieniach w popupie.
+
 ## Dla deweloperów
 
 - `dev/install.sh`: instaluje kopię roboczą i restartuje shell.

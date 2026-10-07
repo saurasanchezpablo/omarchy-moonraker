@@ -50,6 +50,10 @@
 - Fix: a plain AFC unload or eject (no target lane) showed "T0 → T0" and
   "→ T0" in the bar. The lane picker in Tools now lists that lane's own spool
   first, not the printer's active spool.
+- The README warns against passing a real API key to the `configure` IPC
+  call (it would land in the process list and shell history). The manifest
+  declares defaults for `chamberObject` and `temps`, and the architecture
+  notes match how commands are launched.
 
 ## 0.2.1 — 2026-10-07
 

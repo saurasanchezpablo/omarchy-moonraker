@@ -24,6 +24,7 @@
       "apiKey": "",
       "display": "progress",
       "temps": ["nozzle", "bed"],
+      "chamberObject": "",
       "pollInterval": 5,
       "compactWhenIdle": false,
       "hideWhenIdle": false,
@@ -63,6 +64,7 @@
         "type": "multiselect",
         "label": "Temperatures in bar",
         "description": "Which temperatures the 'full' display shows.",
+        "defaultValue": ["nozzle", "bed"],
         "options": [
           { "value": "nozzle", "label": "Nozzle" },
           { "value": "bed", "label": "Bed" },
