@@ -23,6 +23,9 @@ Qidi (tested on a Q2), Voron, RatRig, Creality K-series with Klipper, and others
   toolhead, and a live view of tool changes: old → new filament, unload / load /
   resume, and "change 3 of 12" during multi-color prints. The bar chip shows the
   target tool while a change runs
+- **Spoolman**: one line with the active spool, its color, and the grams left.
+  Click it to pick another spool, so Moonraker tracks usage on the right one.
+  Shown only when Moonraker has Spoolman set up (AFC printers show spools in the lanes)
 - **Controls**: pause, resume, and cancel (cancel asks you to confirm)
 - **Print tools** (the Tools button while printing, or `t`):
   - pause at a chosen layer or after the current one, e.g. to drop in magnets
@@ -166,6 +169,7 @@ omarchy-shell io.github.prodpixa.moonraker toggleLight     # chamber light on/of
 omarchy-shell io.github.prodpixa.moonraker pauseAtLayer 120 # pause when layer 120 starts (0 clears)
 omarchy-shell io.github.prodpixa.moonraker skipObject NAME # skip one object of the running print
 omarchy-shell io.github.prodpixa.moonraker showTools       # open the popup on the print tools
+omarchy-shell io.github.prodpixa.moonraker setSpool 12     # make Spoolman spool 12 active ("none" clears)
 omarchy-shell io.github.prodpixa.moonraker status          # JSON snapshot (never includes the API key)
 omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","display":"full"}'
 ```
@@ -182,6 +186,7 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","d
   },
   "error": "",
   "light": {"object": "led case", "on": true},
+  "spool": {"connected": true, "id": 12, "name": "Polymaker PLA+ Galaxy Black", "material": "PLA", "remaining": 642.5},
   "pause": {"nextLayer": false, "atLayer": 0},
   "objects": {"all": ["part_id_0_copy_0", "part_id_0_copy_1"], "skipped": [], "current": "part_id_0_copy_0"},
   "filament": {
@@ -200,7 +205,8 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","d
 }
 ```
 
-`filament` is `null` on printers without AFC. `camera.url` is the snapshot address that answered, after resolving relative
+`filament` is `null` on printers without AFC, `spool` without Spoolman (it
+appears once the popup has been opened). `camera.url` is the snapshot address that answered, after resolving relative
 URLs and same-host redirects. `streaming` is true only while the popup is open.
 
 The real output is a single line.
@@ -219,6 +225,7 @@ The real output is a single line.
 | No filament section | The printer has no [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) object. Happy Hare / ERCF and other changers aren't supported yet. |
 | Lane weight missing | AFC doesn't know it: set the spool weight in AFC or Spoolman. |
 | No Tools button | Nothing applies to this print: it has a single object (or the slicer didn't label objects for `[exclude_object]`), and the printer lacks the `SET_PAUSE_AT_LAYER`/`SET_PAUSE_NEXT_LAYER` macros (they come with Mainsail's and Fluidd's configs), or the slicer doesn't call `SET_PRINT_STATS_INFO` with layer numbers. |
+| No spool line | Moonraker has no `[spoolman]` section, or the printer has an AFC changer (its lanes show the spools). *Spoolman not connected* means Moonraker can't reach the Spoolman server. |
 | No camera | No enabled webcam is set up in Mainsail/Fluidd, or its service only streams (WebRTC, HLS) and has no snapshot URL. |
 | *HTTP 302 → …* under the camera | The snapshot URL redirects to another host. The widget only follows redirects that stay on the printer's host, so set the webcam's snapshot URL to the final address. |
 

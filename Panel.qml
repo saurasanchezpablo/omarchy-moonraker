@@ -80,6 +80,15 @@ Panel {
   property var excludedObjects: []
   property string currentObject: ""
   property string skipArmed: ""
+  // Spoolman through Moonraker: unknown until the popup asks, then whether
+  // it's there, the active spool, and the picker list.
+  property bool spoolmanChecked: false
+  property bool spoolmanAvailable: false
+  property bool spoolmanConnected: false
+  property int spoolId: -1
+  property var spool: null
+  property var spools: []
+  property bool spoolPickerOpen: false
   property var afc: null
   // Lane loaded when the current change started; AFC forgets it once unloaded.
   property string changeOrigin: ""
@@ -208,7 +217,7 @@ Panel {
   // printer URL or absolute (webcams); the key only goes to the printer's own
   // origin. `file` requests ("thumbnail", "camera") save the body to one of two
   // alternating files under $XDG_RUNTIME_DIR and return { file, type, serial }.
-  function request(method, path, onDone, file) {
+  function request(method, path, onDone, file, json) {
     var gen = root.generation
     var url = /^https?:\/\//i.test(path) ? path : root.baseUrl + path
     var host = Model.hostLabel(url)
@@ -224,7 +233,8 @@ Panel {
         method: method,
         apiKey: Model.sameOrigin(url, root.baseUrl) ? root.apiKey : "",
         maxBytes: file === "thumbnail" ? Model.MAX_IMAGE_BYTES : file ? Model.MAX_SNAPSHOT_BYTES : Model.MAX_JSON_BYTES,
-        output: outFile
+        output: outFile,
+        json: json
       })
     })
     proc.callback = function(exitCode, text) {
@@ -638,6 +648,13 @@ Panel {
     excludeFor = ""
     excludedObjects = []
     currentObject = ""
+    spoolmanChecked = false
+    spoolmanAvailable = false
+    spoolmanConnected = false
+    spoolId = -1
+    spool = null
+    spools = []
+    spoolPickerOpen = false
     toolsOpen = false
     thumbnailSource = ""
     thumbnailFor = ""
@@ -686,6 +703,57 @@ Panel {
       var eo = result && result.status ? result.status.exclude_object : null
       root.excludeObjects = Model.excludeNames(eo ? eo.objects : [])
     })
+  }
+
+  // ---------- Spoolman ----------
+  function loadSpoolman() {
+    if (!configured) return
+    request("GET", "/server/spoolman/status", function(err, result) {
+      if (err && err.status === 0) return   // unreachable: retried on the next open
+      root.spoolmanChecked = true
+      root.spoolmanAvailable = !err
+      if (err) return
+      root.spoolmanConnected = result.spoolman_connected === true
+      root.spoolId = result.spool_id === null || result.spool_id === undefined ? -1 : Number(result.spool_id)
+      root.loadSpool()
+    })
+  }
+
+  function loadSpool() {
+    var id = spoolId
+    if (id < 0 || !spoolmanConnected) {
+      spool = null
+      return
+    }
+    spoolmanGet("/v1/spool/" + id, function(data) {
+      if (root.spoolId === id) root.spool = Model.spoolInfo(data)
+    })
+  }
+
+  function loadSpools() {
+    spoolmanGet("/v1/spool?allow_archived=false", function(data) {
+      root.spools = Model.spoolList(data, root.spoolId)
+    })
+  }
+
+  function spoolmanGet(path, onData) {
+    request("POST", "/server/spoolman/proxy", function(err, result) {
+      if (err || !result || result.error) return
+      onData(result.response)
+    }, "", Model.spoolmanProxy(path))
+  }
+
+  // id < 0 clears the active spool.
+  function setSpool(id) {
+    spoolPickerOpen = false
+    request("POST", "/server/spoolman/spool_id", function(err, result) {
+      if (err) {
+        root.lastError = err.message
+        return
+      }
+      root.spoolId = result && result.spool_id !== null && result.spool_id !== undefined ? Number(result.spool_id) : -1
+      root.loadSpool()
+    }, "", id >= 0 ? { spool_id: id } : {})
   }
 
   // First click arms, a second within 3 s skips (like Cancel).
@@ -750,6 +818,8 @@ Panel {
       poll()
       loadThumbnail()
       if (online) loadWebcams()
+      if (online && (!spoolmanChecked || spoolmanAvailable)) loadSpoolman()
+      spoolPickerOpen = false
     }
   }
 
@@ -844,6 +914,13 @@ Panel {
       root.saveSettings(clean)
       return "ok"
     }
+    // Make this Spoolman spool the active one; "none" clears it.
+    function setSpool(id: string): string {
+      var n = id === "none" ? -1 : parseInt(id, 10)
+      if (isNaN(n) || (n < 0 && id !== "none")) return "expected a spool id or none"
+      root.setSpool(n)
+      return "ok"
+    }
     function showTools(): void {
       root.open()
       root.toolsOpen = root.hasTools
@@ -859,6 +936,11 @@ Panel {
         auth: !root.authFailed, klippy: root.klippyState, file: root.filename, progress: root.progress,
         remaining: root.remaining, temps: root.temps, error: root.lastError,
         light: root.light ? { object: root.light.object, on: root.lightOn } : null,
+        spool: !root.spoolmanAvailable ? null : {
+          connected: root.spoolmanConnected, id: root.spoolId,
+          name: root.spool ? root.spool.name : "", material: root.spool ? root.spool.material : "",
+          remaining: root.spool ? root.spool.remaining : null
+        },
         pause: root.pauseMacros ? { nextLayer: root.pausePlan.nextLayer, atLayer: root.pausePlan.atLayer } : null,
         objects: root.excludeSupported && root.excludeObjects.length > 0
           ? { all: root.excludeObjects, skipped: root.excludedObjects, current: root.currentObject } : null,
@@ -1394,6 +1476,134 @@ Panel {
                 label: Model.ICONS[modelData] + "  " + modelData.charAt(0).toUpperCase() + modelData.slice(1)
                 value: entry ? Model.formatTempPair(entry.temperature, entry.target) : ""
                 heating: entry !== null && entry.target > 0
+              }
+            }
+          }
+        }
+
+        // ---------- Spoolman: active spool + picker ----------
+        // AFC printers show their spools in the lane cards instead.
+        PanelSeparator {
+          visible: spoolSection.visible
+          foreground: root.fg
+        }
+
+        Column {
+          id: spoolSection
+          visible: root.spoolmanAvailable && root.online && root.afc === null
+          width: parent.width
+          spacing: Style.space(6)
+
+          Item {
+            width: parent.width
+            implicitHeight: Style.space(28)
+
+            Swatch {
+              id: spoolSwatch
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              implicitWidth: Style.space(20)
+              colors: root.spool ? root.spool.colors : []
+            }
+            Text {
+              anchors.left: spoolSwatch.right
+              anchors.leftMargin: Style.space(10)
+              anchors.right: spoolWeight.left
+              anchors.rightMargin: Style.space(8)
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: !root.spoolmanConnected ? "Spoolman not connected"
+                : root.spool ? root.spool.name + (root.spool.material ? "  ·  " + root.spool.material : "")
+                : "No spool selected"
+              color: root.fg
+              opacity: root.spool ? 1 : 0.6
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              elide: Text.ElideRight
+            }
+            Text {
+              id: spoolWeight
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: (root.spool ? (Model.formatWeight(root.spool.remaining) || "") + "  " : "")
+                + (root.spoolmanConnected ? (root.spoolPickerOpen ? "\u25B4" : "\u25BE") : "")
+              color: root.fg
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+            MouseArea {
+              anchors.fill: parent
+              enabled: root.spoolmanConnected
+              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+              onClicked: {
+                root.spoolPickerOpen = !root.spoolPickerOpen
+                if (root.spoolPickerOpen) root.loadSpools()
+              }
+            }
+          }
+
+          ListView {
+            id: spoolPicker
+            visible: root.spoolPickerOpen
+            width: parent.width
+            readonly property real rowHeight: Style.space(28)
+            height: Math.min(count, 6) * rowHeight
+            clip: true
+            interactive: count > 6
+            model: root.spools.concat([{ id: -1, name: "No spool", material: "", colors: [], remaining: NaN }])
+
+            delegate: Rectangle {
+              required property var modelData
+              readonly property bool isActive: modelData.id === root.spoolId
+              width: spoolPicker.width
+              height: spoolPicker.rowHeight
+              radius: Style.cornerRadius
+              color: rowArea.containsMouse || isActive ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08) : "transparent"
+
+              Swatch {
+                id: rowSwatch
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                implicitWidth: Style.space(14)
+                colors: modelData.colors
+                visible: modelData.id >= 0
+              }
+              Text {
+                anchors.left: rowSwatch.right
+                anchors.leftMargin: Style.space(8)
+                anchors.right: rowWeight.left
+                anchors.rightMargin: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: (modelData.id >= 0 ? "#" + modelData.id + "  " : "") + modelData.name
+                  + (modelData.material ? "  ·  " + modelData.material : "")
+                color: root.fg
+                opacity: modelData.id >= 0 ? 1 : 0.6
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: isActive
+                elide: Text.ElideRight
+              }
+              Text {
+                id: rowWeight
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: Model.formatWeight(modelData.remaining)
+                color: root.fg
+                opacity: 0.6
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+              MouseArea {
+                id: rowArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.setSpool(modelData.id)
               }
             }
           }

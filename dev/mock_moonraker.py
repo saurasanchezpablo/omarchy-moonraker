@@ -74,7 +74,20 @@ ABUSE = {
 args = None
 scenario = {"name": "printing"}
 # State changed by G-code sent through /printer/gcode/script.
-machine = {"light": 1.0, "pause_next": False, "pause_at": 0, "excluded": []}
+machine = {"spool_id": 3, "light": 1.0, "pause_next": False, "pause_at": 0, "excluded": []}
+# Spoolman inventory (--spoolman), served through Moonraker's proxy.
+SPOOLS = [
+    {"id": 3, "remaining_weight": 642.5, "archived": False, "last_used": "2026-10-06T18:00:00Z",
+     "filament": {"name": "PLA+ Galaxy Black", "material": "PLA", "color_hex": "1B1B2F",
+                  "vendor": {"name": "Polymaker"}}},
+    {"id": 7, "remaining_weight": 980.0, "archived": False, "last_used": "2026-10-01T10:00:00Z",
+     "filament": {"name": "PETG Silk Rainbow", "material": "PETG", "color_hex": "FF0000",
+                  "multi_color_hexes": "E53935,FDD835,43A047,1E88E5", "vendor": {"name": "Sunlu"}}},
+    {"id": 9, "remaining_weight": 120.0, "archived": False, "last_used": None,
+     "filament": {"name": "TPU 95A White", "material": "TPU", "color_hex": "F5F5F5", "vendor": None}},
+    {"id": 2, "remaining_weight": 0, "archived": True, "last_used": "2025-01-01T00:00:00Z",
+     "filament": {"name": "Old PLA", "material": "PLA", "color_hex": "888888"}},
+]
 MOCK_OBJECTS = ["calibration_cube.stl_id_0_copy_0", "calibration_cube.stl_id_0_copy_1",
                 "benchy.stl_id_1_copy_0", "clip.stl_id_2_copy_0"]
 gcode_log = []
@@ -293,8 +306,41 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
             self.send_json({"status": self.status()})
+        elif path == "/server/spoolman/status":
+            if not args.spoolman:
+                self.send_error(404)
+                return
+            self.send_json({"spoolman_connected": True, "pending_reports": [], "spool_id": machine["spool_id"]})
         elif path.startswith(("/server/files/", "/server/webcams/", "/webcam/")):
             self.proxy()
+        else:
+            self.send_error(404)
+
+    def json_body(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            return json.loads(self.rfile.read(length) or b"{}") if length else {}
+        except ValueError:
+            return {}
+
+    def spoolman(self, path):
+        if not args.spoolman:
+            self.send_error(404)
+            return
+        body = self.json_body()
+        if path == "/server/spoolman/spool_id":
+            machine["spool_id"] = body.get("spool_id")
+            self.send_json({"spool_id": machine["spool_id"]})
+        elif path == "/server/spoolman/proxy":
+            target = body.get("path", "")
+            if target.startswith("/v1/spool/"):
+                spool = next((s for s in SPOOLS if str(s["id"]) == target.rsplit("/", 1)[1]), None)
+                self.send_json({"response": spool, "error": None if spool else {"status_code": 404, "message": "not found"}})
+            elif target.startswith("/v1/spool"):
+                live = [s for s in SPOOLS if not s["archived"]] if "allow_archived=false" in target else SPOOLS
+                self.send_json({"response": live, "error": None})
+            else:
+                self.send_json({"response": None, "error": {"status_code": 404, "message": "unknown path"}})
         else:
             self.send_error(404)
 
@@ -333,6 +379,9 @@ class Handler(BaseHTTPRequestHandler):
             "/printer/print/resume": ("paused", "printing"),
             "/printer/print/cancel": (None, "cancelled"),
         }
+        if path.startswith("/server/spoolman/"):
+            self.spoolman(path)
+            return
         if path == "/printer/gcode/script":
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             self.send_json(self.gcode(query.get("script", [""])[0]))
@@ -360,6 +409,7 @@ def main():
                     help="JPEG served as the webcam snapshot when there is no --upstream")
     ap.add_argument("--no-webcam", action="store_true", help="report no webcams")
     ap.add_argument("--afc", action="store_true", help="simulate an AFC filament changer (4-lane Canvas)")
+    ap.add_argument("--spoolman", action="store_true", help="simulate Moonraker's Spoolman integration")
     args = ap.parse_args()
     scenario["name"] = args.scenario
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()

@@ -357,6 +357,45 @@ function excludeCommand(name) {
   return excludeNames([{ name: name }]).length === 1 ? "EXCLUDE_OBJECT NAME=" + name : ""
 }
 
+// ---------- Spoolman ----------
+// Moonraker's spoolman component tracks the active spool and proxies the
+// Spoolman API, so the widget never needs Spoolman's own address.
+
+// A Spoolman spool reduced to { id, name, material, colors, remaining }.
+function spoolInfo(spool) {
+  if (!spool || spool.id === undefined) return null
+  var f = spool.filament || {}
+  var vendor = f.vendor && f.vendor.name ? String(f.vendor.name) : ""
+  var colors = String(f.multi_color_hexes || "").split(",").map(normalizeColor).filter(function(c) { return c !== "" })
+  if (colors.length === 0 && normalizeColor(f.color_hex) !== "") colors = [normalizeColor(f.color_hex)]
+  var name = [vendor, String(f.name || "")].filter(function(s) { return s !== "" }).join(" ")
+  return {
+    id: Number(spool.id),
+    name: name || String(f.material || "Spool " + spool.id),
+    material: String(f.material || ""),
+    colors: colors,
+    remaining: Number(spool.remaining_weight),
+    archived: spool.archived === true,
+    lastUsed: String(spool.last_used || "")
+  }
+}
+
+// Picker list: unarchived spools, the active one first, then most recently used.
+function spoolList(spools, activeId) {
+  var out = (toArray(spools) || []).map(spoolInfo).filter(function(s) { return s && !s.archived })
+  out.sort(function(a, b) {
+    if (a.id === activeId) return -1
+    if (b.id === activeId) return 1
+    return a.lastUsed < b.lastUsed ? 1 : a.lastUsed > b.lastUsed ? -1 : a.id - b.id
+  })
+  return out
+}
+
+// Body for POST /server/spoolman/proxy.
+function spoolmanProxy(path) {
+  return { request_method: "GET", path: path, use_v2_response: true }
+}
+
 // ---------- Notifications ----------
 
 var SOON_SECONDS = 600   // "10 minutes left"
@@ -690,6 +729,10 @@ function curlConfig(opts) {
   ]
   if (opts.method && opts.method !== "GET") lines.push("request = " + curlQuote(opts.method))
   if (opts.apiKey) lines.push("header = " + curlQuote("X-Api-Key: " + opts.apiKey))
+  if (opts.json !== undefined) {
+    lines.push("header = \"Content-Type: application/json\"")
+    lines.push("data-binary = " + curlQuote(JSON.stringify(opts.json)))
+  }
   if (opts.output) {
     lines.push("output = " + curlQuote(opts.output))
     lines.push("create-dirs")

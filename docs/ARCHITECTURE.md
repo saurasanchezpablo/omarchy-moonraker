@@ -68,6 +68,8 @@ until it crashes. curl closes the connection when a limit is hit.
 | Pause / Resume / Cancel | `POST /printer/print/pause`, `/resume`, `/cancel` |
 | Popup open | `GET /server/webcams/list`: webcams configured in Mainsail/Fluidd |
 | A new print starts (with `[exclude_object]`) | `GET /printer/objects/query?exclude_object=objects`: object names, once per file |
+| Popup open, with `[spoolman]` | `GET /server/spoolman/status`, then the active spool via `POST /server/spoolman/proxy` (`GET /v1/spool/<id>`) |
+| Spool picker | `POST /server/spoolman/proxy` (`GET /v1/spool?allow_archived=false`), `POST /server/spoolman/spool_id` |
 | Light button | `POST /printer/gcode/script?script=SET_LED …` or `SET_PIN …` |
 | While the popup is open | `GET <snapshot_url>`, one frame at a time, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/camera-{0,1}` |
 
@@ -170,6 +172,17 @@ per file. Names that couldn't be a `NAME=` parameter (whitespace, `;`, control
 characters) are dropped. The list shows only for plates with more than one
 object, since skipping the only one equals cancelling. Skip needs a second
 click within 3 s, like Cancel, and sends `EXCLUDE_OBJECT NAME=<name>`.
+
+### Spoolman
+
+Everything goes through Moonraker's `spoolman` component, so the widget never
+needs Spoolman's own address or credentials. On popup open it asks
+`/server/spoolman/status`; a 404 means no Spoolman, and it isn't asked again
+until the printer changes. The active spool and the picker list come through
+`/server/spoolman/proxy` with `use_v2_response`, as JSON request bodies (curl
+reads them from its stdin config like everything else). Nothing Spoolman-related
+is polled. The line is hidden on AFC printers, whose lanes already carry the
+spool data AFC syncs from Spoolman.
 
 ### Notifications
 

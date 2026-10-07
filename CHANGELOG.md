@@ -6,6 +6,10 @@
   (e.g. filament runout), or has 10 minutes left, and when Klipper or the
   filament changer stops with an error. Pause/cancel from the popup stays
   quiet. Setting: `notify` (also a toggle in the popup).
+- New: Spoolman. One line shows the active spool's name, color, and grams
+  left; clicking it lists the other spools to switch to. Uses Moonraker's
+  Spoolman proxy, fetched on popup open only. IPC: `setSpool`. The HTTP
+  layer can now send JSON request bodies (through curl's stdin config).
 - New: print tools (the Tools button while printing, or `t`): pause at a
   chosen layer or after the current one, using the standard Mainsail/Fluidd
   macros. A planned pause shows as "Pauses at" in the job details. IPC:
