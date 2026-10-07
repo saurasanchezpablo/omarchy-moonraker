@@ -127,7 +127,10 @@ Panel {
   property string cameraFrame: ""
   property bool cameraFresh: false
   property string cameraError: ""
-  readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/omarchy-moonraker-plus"
+  // Thumbnails, frames, and notification pictures. Never a shared /tmp path:
+  // another user could pre-create it and redirect these writes.
+  readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR")
+    || (Quickshell.env("HOME") + "/.cache")) + "/omarchy-moonraker-plus"
 
   readonly property bool printing: online && Model.isActiveState(printState)
   readonly property real remaining: printing
@@ -461,7 +464,8 @@ Panel {
     var args = ["notify-send", "--app-name=3D Printer", "--urgency=" + e.urgency,
                 "--icon=" + (e.image || "printer")]
     if (e.image) args.push("--hint=string:image-path:" + e.image)
-    args.push(e.title, Model.escapeMarkup(e.body))
+    // "--": notify-send parses options anywhere, and the text comes from the printer.
+    args.push("--", e.title, Model.escapeMarkup(e.body))
     var proc = notifyComponent.createObject(root, { command: args })
     proc.running = true
   }
@@ -830,8 +834,11 @@ Panel {
   }
 
   function openWebUi() {
-    if (!configured || !root.bar) return
-    root.bar.run("xdg-open '" + root.baseUrl.replace(/'/g, "'\\''") + "'")
+    if (!configured) return
+    // Detached, from an argument list: "$@" hands the URL over without the shell
+    // reading it (the shell's own Util pattern for input-built commands), and
+    // normalizeUrl guarantees an http(s):// prefix, so it can't be an option.
+    Quickshell.execDetached(["bash", "-lc", "exec \"$@\"", "bash", "xdg-open", root.baseUrl])
   }
 
   onToolsOpenChanged: if (toolsOpen && spoolmanConnected) loadSpools()

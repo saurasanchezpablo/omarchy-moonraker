@@ -10,6 +10,15 @@
   mock alone. The mock's proxy also stopped following redirects, which copied
   the key to whatever host they pointed at, caps upstream answers at 8 MB, and
   rejects upstream URLs with embedded credentials.
+- Security: a printer-provided redirect like `http://<printer>:x@other-host/`
+  passed the camera's "same host only" rule while curl connected to the other
+  host. URLs are now parsed strictly before every same-host and same-origin
+  check. The API key was never sent there.
+- Security: `notify-send` read options from the notification text, so a
+  printer message starting with `--` could change the notification; the text
+  now follows `--`. The web UI opens through a detached argument list instead
+  of a shell command, and without `$XDG_RUNTIME_DIR` the plugin's files go to
+  `~/.cache` instead of a predictable `/tmp` folder.
 
 ## 0.2.1 — 2026-10-07
 
