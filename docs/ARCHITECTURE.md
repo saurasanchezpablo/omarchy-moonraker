@@ -137,6 +137,19 @@ AFC forgets the old lane once it is unloaded, so the widget remembers which lane
 was loaded when the change started (`changeOrigin`) to keep showing "T0 → T2".
 While a change runs and the popup is open, polling speeds up to once a second.
 
+### Notifications
+
+After every status update, `Model.notifications(previous, current)` compares
+two snapshots and returns the events to announce: a print finishing, being
+cancelled, failing, or pausing; Klipper leaving `ready` (but not a restart into
+`startup`); an AFC error; and the remaining time crossing 10 minutes (once per
+job). The first status after start-up or a printer change never notifies.
+Pause and cancel clicked in the popup within the last 15 s stay quiet.
+
+Each notification is one `notify-send` process started from an argument list,
+never through a shell, and the body is markup-escaped, so file names and
+messages from the printer stay plain text.
+
 ### State mapping
 
 | Source | Widget state |

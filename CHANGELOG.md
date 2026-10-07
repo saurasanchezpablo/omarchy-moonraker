@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- New: desktop notifications when a print finishes, is cancelled, fails, pauses
+  (e.g. filament runout), or has 10 minutes left, and when Klipper or the
+  filament changer stops with an error. Pause/cancel from the popup stays
+  quiet. Setting: `notify` (also a toggle in the popup).
 - New: filament changer support for [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On)
   (Elegoo Canvas, Box Turtle, Night Owl, …). The popup lists every lane with its
   color, tool, material, and remaining weight, and highlights the one in the

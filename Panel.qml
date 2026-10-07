@@ -29,6 +29,7 @@ Panel {
   readonly property bool showCamera: setting("showCamera", true) !== false
   readonly property string webcamName: String(setting("webcam", "")).trim()
   readonly property bool showFilament: setting("showFilament", true) !== false
+  readonly property bool notifyEnabled: setting("notify", true) !== false
   readonly property bool configured: baseUrl !== ""
 
   // Theme colors come from the bar so the widget follows `omarchy theme set`;
@@ -66,6 +67,12 @@ Panel {
   property var afc: null
   // Lane loaded when the current change started; AFC forgets it once unloaded.
   property string changeOrigin: ""
+  // Notifications: the last status snapshot, whether this job already got its
+  // "minutes left" notice, and when the user last acted from the popup (their
+  // own pause/cancel shouldn't notify them).
+  property var lastSnapshot: null
+  property string soonSentFor: ""
+  property real userActionAt: 0
   property string thumbnailSource: ""
   property string thumbnailFor: ""
   // Webcams from /server/webcams/list (Model.webcamList entries).
@@ -286,6 +293,7 @@ Panel {
           root.klippyState = "disconnected"
           root.klippyMessage = ""
           root.lastError = err.message
+          root.checkNotifications()
           return
         }
         root.markOffline(err)
@@ -354,9 +362,42 @@ Panel {
     else if (afc.stage === 0 && afc.loaded !== "") changeOrigin = afc.loaded
     else if (!prevAfc || !prevAfc.changing) changeOrigin = prevAfc ? prevAfc.loaded : ""
 
+    checkNotifications()
+
     if (filename !== metaFor) loadMetadata()
     if (opened) loadThumbnail()
     if (opened && !webcamsLoaded) loadWebcams()
+  }
+
+  // ---------- Notifications ----------
+  function checkNotifications() {
+    var snap = {
+      state: printState, klippy: klippyState, file: filename,
+      message: statusMessage, klippyMessage: klippyMessage,
+      remaining: Model.isActiveState(printState)
+        ? Model.remainingSeconds(printDuration, progress, fileMeta ? fileMeta.estimated_time : 0) : -1,
+      duration: printDuration,
+      afcError: afc !== null && afc.error, afcMessage: afc ? afc.message : ""
+    }
+    var events = Model.notifications(lastSnapshot, snap, soonSentFor === filename)
+    lastSnapshot = snap
+    var mine = Date.now() - userActionAt < 15000
+    for (var i = 0; i < events.length; i++) {
+      var e = events[i]
+      if (e.kind === "soon") soonSentFor = filename
+      if (mine && (e.kind === "paused" || e.kind === "cancelled")) continue
+      notify(e)
+    }
+  }
+
+  // notify-send runs from an argument list (no shell), so printer-provided
+  // text can't become a command.
+  function notify(e) {
+    if (!notifyEnabled) return
+    var args = ["notify-send", "--app-name=3D Printer", "--urgency=" + e.urgency,
+                "--icon=" + (e.image || "printer"), e.title, Model.escapeMarkup(e.body)]
+    var proc = notifyComponent.createObject(root, { command: args })
+    proc.running = true
   }
 
   function loadMetadata() {
@@ -494,6 +535,7 @@ Panel {
     afcLanesKey = ""
     afc = null
     changeOrigin = ""
+    lastSnapshot = null
     thumbnailSource = ""
     thumbnailFor = ""
     webcams = []
@@ -505,6 +547,7 @@ Panel {
   function printAction(action) {
     if (actionBusy) return
     actionBusy = true
+    userActionAt = Date.now()
     request("POST", "/printer/print/" + action, function(err) {
       root.actionBusy = false
       if (err) root.lastError = err.message
@@ -603,6 +646,13 @@ Panel {
     }
   }
 
+  Component {
+    id: notifyComponent
+    Process {
+      onExited: destroy()
+    }
+  }
+
   IpcHandler {
     target: "io.github.prodpixa.moonraker"
 
@@ -618,7 +668,7 @@ Panel {
       var patch
       try { patch = JSON.parse(json) } catch (e) { return "invalid JSON" }
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "expected a JSON object"
-      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament"]
+      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify"]
       var clean = {}
       for (var k in patch) {
         if (allowed.indexOf(k) < 0) return "unknown setting: " + k
@@ -1322,6 +1372,17 @@ Panel {
             fontFamily: root.fontFamily
             titleSize: Style.font.bodySmall
             onClicked: root.saveSettings({ compactWhenIdle: !root.compactWhenIdle })
+          }
+
+          Toggle {
+            width: parent.width
+            label: "Notifications"
+            description: "Finished, paused, failed, and 10 minutes left"
+            checked: root.notifyEnabled
+            foreground: root.fg
+            fontFamily: root.fontFamily
+            titleSize: Style.font.bodySmall
+            onClicked: root.saveSettings({ notify: !root.notifyEnabled })
           }
 
           Toggle {

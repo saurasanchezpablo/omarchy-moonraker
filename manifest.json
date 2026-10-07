@@ -30,7 +30,8 @@
       "hideWhenOffline": false,
       "showCamera": true,
       "webcam": "",
-      "showFilament": true
+      "showFilament": true,
+      "notify": true
     },
     "schema": [
       {
@@ -121,6 +122,13 @@
         "type": "boolean",
         "label": "Show filament",
         "description": "For printers with an AFC filament changer (Box Turtle, Elegoo Canvas, …): show the lanes, the loaded spool, and tool changes in the popup.",
+        "defaultValue": true
+      },
+      {
+        "key": "notify",
+        "type": "boolean",
+        "label": "Notifications",
+        "description": "Desktop notifications when a print finishes, pauses, fails, or has 10 minutes left, and when Klipper or the filament changer stops with an error.",
         "defaultValue": true
       }
     ]

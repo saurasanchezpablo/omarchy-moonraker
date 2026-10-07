@@ -23,6 +23,9 @@ Qidi (tested on a Q2), Voron, RatRig, Creality K-series with Klipper, and others
   resume, and "change 3 of 12" during multi-color prints. The bar chip shows the
   target tool while a change runs
 - **Controls**: pause, resume, and cancel (cancel asks you to confirm)
+- **Desktop notifications** when a print finishes, pauses (e.g. filament
+  runout), fails, or has 10 minutes left, and when Klipper or the filament
+  changer stops with an error. Your own pause/cancel from the popup stays quiet
 - **Every printer state is covered**: setup, unreachable, bad API key, Klipper
   starting/shutdown/disconnected, idle, heating, printing, paused, complete,
   cancelled, and error. See [docs/STATES.md](docs/STATES.md).
@@ -117,7 +120,8 @@ The Settings section in the popup writes these values to the widget's entry in
   "chamberObject": "",
   "showCamera": true,
   "webcam": "",
-  "showFilament": true
+  "showFilament": true,
+  "notify": true
 }
 ```
 
@@ -134,6 +138,7 @@ The Settings section in the popup writes these values to the widget's entry in
 | `chamberObject`   | auto                | Klipper object for the chamber temperature, e.g. `temperature_sensor chamber`. Detected automatically when empty. |
 | `showCamera`      | `true`              | Show the printer's webcam in the popup. The toggle appears in Settings when the printer has a webcam. |
 | `webcam`          | first one           | Name of the webcam to show, as set in Mainsail/Fluidd. With several webcams, click the picture to switch. |
+| `notify`          | `true`              | Desktop notifications (through `notify-send`) for finished, paused, failed, and almost-done prints, and Klipper or filament changer errors. |
 | `showFilament`    | `true`              | Show the filament changer's lanes and tool changes. Only has an effect on printers with [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On). |
 
 The API key is stored in plain text in `shell.json`, like every other Omarchy widget setting.

@@ -231,6 +231,49 @@ function thumbnailPath(filename, metadata) {
   return dir + best.relative_path
 }
 
+// ---------- Notifications ----------
+
+var SOON_SECONDS = 600   // "10 minutes left"
+
+// Desktop notifications for what changed between two status snapshots
+// ({ state, klippy, file, message, klippyMessage, remaining, duration,
+// afcError, afcMessage }). `prev` is null right after start-up or a printer
+// change, which never notifies. `soonSent` is true once this job had its
+// "minutes left" notice. Returns [{ kind, title, body, urgency }].
+function notifications(prev, next, soonSent) {
+  if (!prev || !next) return []
+  var out = []
+  var name = displayFileName(next.file || prev.file)
+  var wasActive = isActiveState(prev.state)
+  if (wasActive && next.state === "complete")
+    out.push({ kind: "complete", title: "Print finished",
+               body: name + (next.duration > 0 ? " · " + formatDuration(next.duration) : ""), urgency: "normal" })
+  else if (wasActive && next.state === "cancelled")
+    out.push({ kind: "cancelled", title: "Print cancelled", body: name, urgency: "normal" })
+  else if (wasActive && next.state === "error")
+    out.push({ kind: "error", title: "Print failed", body: next.message || name, urgency: "critical" })
+  else if (prev.state === "printing" && next.state === "paused")
+    out.push({ kind: "paused", title: "Print paused", body: next.message || name, urgency: "critical" })
+
+  if (prev.klippy === "ready" && next.klippy !== "ready" && next.klippy !== "startup" && next.klippy !== "")
+    out.push({ kind: "klippy", title: stateLabel("", next.klippy),
+               body: next.klippyMessage || "Klipper stopped", urgency: "critical" })
+
+  if (next.afcError && !prev.afcError)
+    out.push({ kind: "afc", title: "Filament changer error", body: next.afcMessage || name, urgency: "critical" })
+
+  if (!soonSent && next.state === "printing" && next.remaining >= 0 && next.remaining <= SOON_SECONDS
+      && prev.remaining > SOON_SECONDS)
+    out.push({ kind: "soon", title: Math.max(1, Math.round(next.remaining / 60)) + " minutes left",
+               body: name, urgency: "low" })
+  return out
+}
+
+// notify-send bodies may be parsed as markup; printer text must stay text.
+function escapeMarkup(text) {
+  return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
 // ---------- Filament changer (AFC) ----------
 // Armored Turtle's AFC add-on drives Box Turtle, Night Owl, Elegoo's Canvas
 // and others. The `AFC` object holds the changer state; every lane is its own
