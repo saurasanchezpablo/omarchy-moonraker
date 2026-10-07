@@ -28,6 +28,7 @@ Panel {
   readonly property bool hideWhenOffline: setting("hideWhenOffline", false) === true
   readonly property bool showCamera: setting("showCamera", true) !== false
   readonly property string webcamName: String(setting("webcam", "")).trim()
+  readonly property bool showFilament: setting("showFilament", true) !== false
   readonly property bool configured: baseUrl !== ""
 
   // Theme colors come from the bar so the widget follows `omarchy theme set`;
@@ -57,6 +58,14 @@ Panel {
   property string metaFor: ""
   property string chamberObject: ""
   property bool objectsProbed: false
+  // Filament changer (AFC): every AFC_* object, the lane -> object map once
+  // the AFC object has listed its lanes, and the reduced state (Model.afcState).
+  property var afcObjects: []
+  property var afcLaneObjects: ({})
+  property string afcLanesKey: ""
+  property var afc: null
+  // Lane loaded when the current change started; AFC forgets it once unloaded.
+  property string changeOrigin: ""
   property string thumbnailSource: ""
   property string thumbnailFor: ""
   // Webcams from /server/webcams/list (Model.webcamList entries).
@@ -91,6 +100,9 @@ Panel {
   readonly property bool finished: online && filename !== ""
     && (printState === "complete" || printState === "cancelled" || printState === "error")
   readonly property bool klippyReady: klippyState === "" || klippyState === "ready"
+  readonly property bool changing: online && afc !== null && afc.changing
+  readonly property var changeFrom: changing ? Model.afcLane(afc, changeOrigin) : null
+  readonly property var changeTo: changing ? Model.afcLane(afc, afc.target || afc.moving) : null
 
   readonly property int webcamIndex: Model.pickWebcam(webcams, webcamName)
   readonly property var webcam: webcamIndex >= 0 ? webcams[webcamIndex] : null
@@ -117,6 +129,8 @@ Panel {
     authFailed: root.authFailed,
     compact: root.compactNow,
     heating: root.heating,
+    changing: root.changing,
+    changeTarget: Model.laneLabel(root.changeTo),
     klippyState: root.klippyState,
     state: root.printState,
     progress: root.progress,
@@ -130,6 +144,7 @@ Panel {
     if (!configured) return "Not configured"
     if (authFailed) return "Unauthorized"
     if (!online) return everConnected ? "Offline" : (lastError ? "Unreachable" : "Connecting…")
+    if (changing) return "Changing filament"
     if (heating) return "Heating"
     return Model.stateLabel(printState, klippyState)
   }
@@ -141,7 +156,7 @@ Panel {
 
   // Compact: a dimmed icon while nothing is printing, still clickable.
   readonly property bool compactNow: compactWhenIdle && configured && online
-    && klippyReady && !printing && printState !== "error"
+    && klippyReady && !printing && !changing && printState !== "error"
 
   // ---------- Settings persistence ----------
   function saveSettings(patch) {
@@ -259,7 +274,8 @@ Panel {
       probeObjects()
       return
     }
-    inflight = request("GET", Model.queryPath(chamberObject), function(err, result) {
+    var extra = afcObjects.length > 0 ? Model.afcQuery(afcLaneObjects) : []
+    inflight = request("GET", Model.queryPath(chamberObject, extra), function(err, result) {
       root.inflight = null
       if (err) {
         // Klippy not ready still means Moonraker is reachable.
@@ -286,7 +302,10 @@ Panel {
         root.markOffline(err)
         return
       }
-      root.chamberObject = Model.pickChamberObject(result ? result.objects : [], root.setting("chamberObject", ""))
+      var objects = Model.toArray(result ? result.objects : []) || []
+      root.chamberObject = Model.pickChamberObject(objects, root.setting("chamberObject", ""))
+      root.afcObjects = objects.indexOf("AFC") >= 0
+        ? objects.filter(function(o) { return String(o).indexOf("AFC_") === 0 }) : []
       root.objectsProbed = true
       root.poll()
     })
@@ -319,6 +338,21 @@ Panel {
       if (entry) next[Model.TEMP_KEYS[i]] = entry
     }
     temps = next
+
+    // The AFC object names its lanes; the lane objects join the next query.
+    if (status.AFC) {
+      var lanesKey = (Model.toArray(status.AFC.lanes) || []).join("\n")
+      if (lanesKey !== afcLanesKey) {
+        afcLanesKey = lanesKey
+        afcLaneObjects = Model.afcLaneObjects(afcObjects, status.AFC)
+        Qt.callLater(poll)
+      }
+    }
+    var prevAfc = afc
+    afc = Model.afcState(status, afcLaneObjects)
+    if (!afc || !afc.changing) changeOrigin = ""
+    else if (afc.stage === 0 && afc.loaded !== "") changeOrigin = afc.loaded
+    else if (!prevAfc || !prevAfc.changing) changeOrigin = prevAfc ? prevAfc.loaded : ""
 
     if (filename !== metaFor) loadMetadata()
     if (opened) loadThumbnail()
@@ -455,6 +489,11 @@ Panel {
     temps = ({})
     objectsProbed = false
     chamberObject = ""
+    afcObjects = []
+    afcLaneObjects = ({})
+    afcLanesKey = ""
+    afc = null
+    changeOrigin = ""
     thumbnailSource = ""
     thumbnailFor = ""
     webcams = []
@@ -579,7 +618,7 @@ Panel {
       var patch
       try { patch = JSON.parse(json) } catch (e) { return "invalid JSON" }
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "expected a JSON object"
-      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam"]
+      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament"]
       var clean = {}
       for (var k in patch) {
         if (allowed.indexOf(k) < 0) return "unknown setting: " + k
@@ -598,6 +637,16 @@ Panel {
         configured: root.configured, online: root.online, state: root.printState,
         auth: !root.authFailed, klippy: root.klippyState, file: root.filename, progress: root.progress,
         remaining: root.remaining, temps: root.temps, error: root.lastError,
+        filament: root.afc === null ? null : {
+          loaded: root.afc.loaded, state: root.afc.state, changing: root.changing,
+          from: root.changeFrom ? root.changeFrom.name : "", to: root.changeTo ? root.changeTo.name : "",
+          step: Model.afcStepLabel(root.afc), toolchange: root.afc.toolchange, toolchanges: root.afc.toolchanges,
+          error: root.afc.error, message: root.afc.message,
+          lanes: root.afc.lanes.map(function(l) {
+            return { name: l.name, tool: l.tool, material: l.material, color: l.colors[0] || "",
+                     weight: l.weight, ready: l.ready, loaded: l.loaded }
+          })
+        },
         camera: {
           enabled: root.showCamera, webcams: root.webcams.map(function(c) { return c.name }),
           active: root.webcam ? root.webcam.name : "", snapshot: root.webcam ? Model.redactUrl(root.webcam.snapshot) : "",
@@ -609,7 +658,8 @@ Panel {
   }
 
   Timer {
-    interval: (root.opened || root.printing ? Math.min(root.pollSeconds, 3) : root.pollSeconds) * 1000
+    interval: (root.opened && root.changing ? 1
+      : root.opened || root.printing ? Math.min(root.pollSeconds, 3) : root.pollSeconds) * 1000
     running: root.configured
     repeat: true
     onTriggered: root.poll()
@@ -689,6 +739,7 @@ Panel {
             text: root.authFailed ? Model.ICONS.lock
               : !root.online && root.configured ? Model.ICONS.offline
               : !root.klippyReady || root.printState === "error" ? Model.ICONS.alert
+              : root.changing ? Model.ICONS.swap
               : root.heating ? Model.ICONS.heat
               : root.printState === "paused" ? Model.ICONS.pause
               : root.printState === "complete" ? Model.ICONS.check
@@ -754,9 +805,12 @@ Panel {
           visible: text !== ""
           width: parent.width
           textFormat: Text.PlainText
-          readonly property bool isError: root.lastError !== "" || !root.klippyReady || root.printState === "error"
+          readonly property bool afcError: root.afc !== null && root.afc.message !== ""
+            && (root.afc.error || root.afc.messageType === "error")
+          readonly property bool isError: root.lastError !== "" || !root.klippyReady || root.printState === "error" || afcError
           text: root.lastError !== "" ? root.lastError
             : !root.klippyReady ? root.klippyMessage
+            : afcError ? root.afc.message
             : root.statusMessage
           color: isError ? root.urgentColor : root.fg
           opacity: isError ? 1 : 0.7
@@ -793,6 +847,101 @@ Panel {
               alwaysRunToEnd: true
               NumberAnimation { from: 1.0; to: 0.45; duration: 900; easing.type: Easing.InOutSine }
               NumberAnimation { from: 0.45; to: 1.0; duration: 900; easing.type: Easing.InOutSine }
+            }
+          }
+        }
+
+        // ---------- Filament change in progress ----------
+        Rectangle {
+          id: changeCard
+          visible: root.changing && root.showFilament
+          width: parent.width
+          implicitHeight: changeColumn.implicitHeight + Style.space(24)
+          radius: Style.cornerRadius
+          color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.06)
+
+          Column {
+            id: changeColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.margins: Style.space(12)
+            spacing: Style.space(10)
+
+            // From → to
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.space(10)
+
+              ChangeEnd { lane: root.changeFrom; fallback: "—" }
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "\u2192"
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.title
+              }
+              ChangeEnd { lane: root.changeTo; fallback: "?" }
+            }
+
+            // Unload → Load → Resume
+            Row {
+              id: steps
+              width: parent.width
+              spacing: Style.space(6)
+              readonly property var labels: ["Unload", "Load", "Resume"]
+              readonly property real cellWidth: (width - spacing * 2) / 3
+
+              Repeater {
+                model: steps.labels
+                Column {
+                  required property int index
+                  required property string modelData
+                  readonly property int stage: root.afc ? root.afc.stage : 0
+                  width: steps.cellWidth
+                  spacing: Style.space(4)
+
+                  Rectangle {
+                    width: parent.width
+                    height: Style.space(6)
+                    radius: height / 2
+                    color: index <= stage ? root.fg : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.15)
+                    SequentialAnimation on opacity {
+                      running: index === stage && root.opened && root.changing
+                      loops: Animation.Infinite
+                      alwaysRunToEnd: true
+                      NumberAnimation { from: 1.0; to: 0.35; duration: 700; easing.type: Easing.InOutSine }
+                      NumberAnimation { from: 0.35; to: 1.0; duration: 700; easing.type: Easing.InOutSine }
+                    }
+                  }
+                  Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    textFormat: Text.PlainText
+                    text: modelData
+                    color: root.fg
+                    opacity: index === stage ? 1 : 0.5
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: index === stage
+                  }
+                }
+              }
+            }
+
+            Text {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              textFormat: Text.PlainText
+              text: Model.afcStepLabel(root.afc)
+                + (root.afc && root.afc.toolchanges > 0
+                   ? "  ·  change " + root.afc.toolchange + " of " + root.afc.toolchanges : "")
+              color: root.fg
+              opacity: 0.7
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              elide: Text.ElideRight
             }
           }
         }
@@ -937,6 +1086,11 @@ Panel {
               value: root.currentLayer + " / " + root.totalLayer
             }
             InfoPair { label: "Filament"; value: Model.formatFilament(root.filamentUsed) }
+            InfoPair {
+              visible: root.printing && root.afc !== null && root.afc.toolchanges > 0
+              label: "Color changes"
+              value: root.afc ? root.afc.toolchange + " / " + root.afc.toolchanges : ""
+            }
           }
         }
 
@@ -971,6 +1125,43 @@ Panel {
                 label: Model.ICONS[modelData] + "  " + modelData.charAt(0).toUpperCase() + modelData.slice(1)
                 value: entry ? Model.formatTempPair(entry.temperature, entry.target) : ""
                 heating: entry !== null && entry.target > 0
+              }
+            }
+          }
+        }
+
+        // ---------- Filament lanes ----------
+        PanelSeparator {
+          visible: laneSection.visible
+          foreground: root.fg
+        }
+
+        Column {
+          id: laneSection
+          visible: root.showFilament && root.online && root.afc !== null && root.afc.lanes.length > 0
+          width: parent.width
+          spacing: Style.space(10)
+
+          PanelSectionHeader {
+            text: root.afc && root.afc.bypass ? "FILAMENT  ·  BYPASS" : "FILAMENT"
+            foreground: root.fg
+            fontFamily: root.fontFamily
+          }
+
+          Grid {
+            id: laneGrid
+            width: parent.width
+            readonly property int count: root.afc ? root.afc.lanes.length : 0
+            columns: Math.max(1, Math.min(4, count))
+            spacing: Style.space(6)
+            readonly property real cellWidth: (width - spacing * (columns - 1)) / columns
+
+            Repeater {
+              model: root.afc ? root.afc.lanes : []
+              LaneCard {
+                required property var modelData
+                lane: modelData
+                width: laneGrid.cellWidth
               }
             }
           }
@@ -1134,6 +1325,18 @@ Panel {
           }
 
           Toggle {
+            visible: root.afc !== null
+            width: parent.width
+            label: "Show filament"
+            description: "Lanes, the loaded spool, and tool changes"
+            checked: root.showFilament
+            foreground: root.fg
+            fontFamily: root.fontFamily
+            titleSize: Style.font.bodySmall
+            onClicked: root.saveSettings({ showFilament: !root.showFilament })
+          }
+
+          Toggle {
             visible: root.webcams.length > 0
             width: parent.width
             label: "Show camera"
@@ -1179,6 +1382,145 @@ Panel {
       } else if (status === Image.Error) {
         root.cameraFrameDone(false, "Couldn't read the camera image")
       }
+    }
+  }
+
+  // Round filament swatch: one slice per color, ringed so dark filament stays
+  // visible on dark themes, with an optional label (the tool) on top.
+  component Swatch: Canvas {
+    property var colors: []
+    property string label: ""
+    implicitWidth: Style.space(34)
+    implicitHeight: implicitWidth
+    readonly property color ring: root.fg
+    onColorsChanged: requestPaint()
+    onRingChanged: requestPaint()
+    onWidthChanged: requestPaint()
+    onPaint: {
+      var ctx = getContext("2d")
+      var r = Math.min(width, height) / 2
+      ctx.reset()
+      var list = colors && colors.length ? colors : [Qt.rgba(ring.r, ring.g, ring.b, 0.12)]
+      for (var i = 0; i < list.length; i++) {
+        ctx.beginPath()
+        ctx.moveTo(r, r)
+        ctx.arc(r, r, r - 1, -Math.PI / 2 + i * 2 * Math.PI / list.length,
+                -Math.PI / 2 + (i + 1) * 2 * Math.PI / list.length)
+        ctx.closePath()
+        ctx.fillStyle = list[i]
+        ctx.fill()
+      }
+      ctx.beginPath()
+      ctx.arc(r, r, r - 1, 0, 2 * Math.PI)
+      ctx.lineWidth = 1.5
+      ctx.strokeStyle = Qt.rgba(ring.r, ring.g, ring.b, 0.35)
+      ctx.stroke()
+    }
+
+    Text {
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      text: parent.label
+      color: Model.isLightColor(parent.colors && parent.colors.length ? parent.colors[0] : "") ? "#111111" : "#f5f5f5"
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      font.bold: true
+    }
+  }
+
+  // One lane of the changer: color, tool, material, and what's left.
+  component LaneCard: Rectangle {
+    property var lane: null
+    readonly property bool involved: root.changing && lane !== null
+      && ((root.changeFrom && root.changeFrom.name === lane.name) || (root.changeTo && root.changeTo.name === lane.name))
+    implicitHeight: laneColumn.implicitHeight + Style.space(16)
+    radius: Style.cornerRadius
+    color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, lane && lane.loaded ? 0.12 : 0.04)
+    border.width: lane && lane.loaded ? 2 : 1
+    border.color: lane && lane.loaded ? root.fg : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.15)
+    property real pulse: 1
+    opacity: (lane && lane.ready ? 1 : 0.45) * pulse
+
+    SequentialAnimation on pulse {
+      running: involved && root.opened
+      loops: Animation.Infinite
+      alwaysRunToEnd: true
+      NumberAnimation { from: 1.0; to: 0.5; duration: 700; easing.type: Easing.InOutSine }
+      NumberAnimation { from: 0.5; to: 1.0; duration: 700; easing.type: Easing.InOutSine }
+    }
+
+    // Nozzle badge on the lane that is in the toolhead.
+    Text {
+      visible: lane !== null && lane.loaded
+      anchors.top: parent.top
+      anchors.right: parent.right
+      anchors.margins: Style.space(5)
+      textFormat: Text.PlainText
+      text: Model.ICONS.nozzle
+      color: root.fg
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+    }
+
+    Column {
+      id: laneColumn
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.margins: Style.space(6)
+      spacing: Style.space(4)
+
+      Swatch {
+        anchors.horizontalCenter: parent.horizontalCenter
+        colors: lane ? lane.colors : []
+        label: Model.laneLabel(lane)
+      }
+      Text {
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        textFormat: Text.PlainText
+        text: lane && lane.ready ? (lane.material || "—") : "Empty"
+        color: root.fg
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.bodySmall
+        font.bold: lane !== null && lane.loaded
+        elide: Text.ElideRight
+      }
+      Text {
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        textFormat: Text.PlainText
+        text: !lane ? "" : lane.status !== "" ? lane.status
+          : lane.loaded ? "Loaded"
+          : lane.ready ? (Model.formatWeight(lane.weight) || "Ready") : lane.name
+        color: root.fg
+        opacity: 0.6
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        elide: Text.ElideRight
+      }
+    }
+  }
+
+  // One side of the change card: swatch plus material.
+  component ChangeEnd: Row {
+    property var lane: null
+    property string fallback: ""
+    spacing: Style.space(6)
+
+    Swatch {
+      implicitWidth: Style.space(28)
+      colors: lane ? lane.colors : []
+      label: lane ? Model.laneLabel(lane) : fallback
+    }
+    Text {
+      anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
+      text: lane ? (lane.material || lane.name) : ""
+      color: root.fg
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+      font.bold: true
     }
   }
 

@@ -62,7 +62,7 @@ until it crashes. curl closes the connection when a limit is hit.
 | When | Request |
 |------|---------|
 | First connect / after the URL or key changes | `GET /printer/objects/list`: finds the chamber sensor object |
-| Every poll | `GET /printer/objects/query?print_stats&virtual_sdcard&display_status&extruder&heater_bed&webhooks[&<chamber>]` |
+| Every poll | `GET /printer/objects/query?print_stats&virtual_sdcard&display_status&extruder&heater_bed&webhooks[&<chamber>][&AFC=…&<lane objects>=…]` |
 | When the file name changes | `GET /server/files/metadata?filename=…`: slicer estimate, layer count, thumbnails |
 | Popup open, when the job has a thumbnail | `GET /server/files/gcodes/<thumb>`, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/` and shown from there |
 | Pause / Resume / Cancel | `POST /printer/print/pause`, `/resume`, `/cancel` |
@@ -107,6 +107,35 @@ Finding the snapshot:
   `/webcam/` to the streamer's own port, e.g. `:8080`).
 - The URL that answered is remembered until the webcam or printer changes.
 - A response that isn't `image/*` counts as a failure.
+
+### Filament changer (AFC)
+
+Printers running Armored Turtle's
+[AFC add-on](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) (Box Turtle,
+Night Owl, Elegoo's Canvas, …) have an `AFC` object plus one object per lane,
+whose type depends on the hardware: `AFC_lane CANVAS_1`, `AFC_stepper lane1`, ….
+
+- The object probe notes whether `AFC` exists and keeps every `AFC_*` name.
+- Once a status reply lists `AFC.lanes`, `Model.afcLaneObjects()` picks one
+  object per lane (`AFC_lane` first, then `AFC_stepper`, then any other
+  `AFC_* <lane>` that isn't a unit) and the lanes join the next poll.
+- The query asks only for the fields the widget uses (`AFC=current_load,…`,
+  `<lane>=map,material,color,…`), so four lanes add well under 2 KB per poll.
+- `Model.afcState()` reduces it to lanes plus a change in progress.
+
+| AFC field | Used for |
+|-----------|----------|
+| `current_load` | lane in the toolhead (highlighted, nozzle badge) |
+| `next_lane` | target of a tool change |
+| `current_state` | change stage: `Unloading` → `Loading` → `Restoring` → `Idle` |
+| `current_lane` | lane moving right now; its `status` (`Tool Unloading`, `HUB Loading`, …) is the step text |
+| `current_toolchange` / `number_of_toolchanges` | "change 3 of 12" |
+| `error_state`, `message` | AFC errors in the popup's message line |
+| lane `map`, `material`/`filament_name`, `color`/`multi_color_hexes`, `weight`, `load`+`prep` | lane cards |
+
+AFC forgets the old lane once it is unloaded, so the widget remembers which lane
+was loaded when the change started (`changeOrigin`) to keep showing "T0 → T2".
+While a change runs and the popup is open, polling speeds up to once a second.
 
 ### State mapping
 

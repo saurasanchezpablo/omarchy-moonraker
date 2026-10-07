@@ -44,7 +44,8 @@ var ICONS = {
   web: "\u{F059F}",       // nf-md-web
   cog: "\u{F0493}",       // nf-md-cog
   refresh: "\u{F0450}",   // nf-md-refresh
-  camera: "\u{F0100}"     // nf-md-camera
+  camera: "\u{F0100}",    // nf-md-camera
+  swap: "\u{F04E1}"       // nf-md-swap_horizontal
 }
 
 function normalizeUrl(raw) {
@@ -125,10 +126,11 @@ function pickChamberObject(objects, override) {
   return ""
 }
 
-function queryPath(chamberObject) {
+// `extra` holds already-encoded query parts, e.g. from afcQuery().
+function queryPath(chamberObject, extra) {
   var objs = ["print_stats", "virtual_sdcard", "display_status", "extruder", "heater_bed", "webhooks"]
   if (chamberObject) objs.push(chamberObject)
-  return "/printer/objects/query?" + objs.map(encodeURIComponent).join("&")
+  return "/printer/objects/query?" + objs.map(encodeURIComponent).concat(extra || []).join("&")
 }
 
 function isActiveState(state) {
@@ -227,6 +229,150 @@ function thumbnailPath(filename, metadata) {
   var slash = file.lastIndexOf("/")
   var dir = slash >= 0 ? file.slice(0, slash + 1) : ""
   return dir + best.relative_path
+}
+
+// ---------- Filament changer (AFC) ----------
+// Armored Turtle's AFC add-on drives Box Turtle, Night Owl, Elegoo's Canvas
+// and others. The `AFC` object holds the changer state; every lane is its own
+// object ("AFC_lane CANVAS_1", "AFC_stepper lane1", …) with the same fields.
+
+var AFC_FIELDS = ["current_load", "current_lane", "next_lane", "current_state", "current_toolchange",
+                  "number_of_toolchanges", "error_state", "message", "lanes", "units", "bypass_state"]
+var AFC_LANE_FIELDS = ["lane", "map", "load", "prep", "tool_loaded", "material", "color", "filament_name",
+                       "multi_color_hexes", "weight", "status"]
+// Lane object types, preferred first. Unknown AFC_* types with the lane's
+// name are accepted too, except the unit objects (which can share it).
+var AFC_LANE_TYPES = ["AFC_lane", "AFC_stepper", "AFC_hybrid_stepper"]
+
+// AFC.current_state values that mean filament is moving.
+var AFC_BUSY = ["Loading", "Unloading", "ToolSwap", "ToolDock", "ToolPickup", "Ejecting", "Moving", "Restoring"]
+
+// lane name -> Klipper object name, from the printer's object list.
+function afcLaneObjects(objects, afcStatus) {
+  objects = toArray(objects) || []
+  var lanes = toArray(afcStatus && afcStatus.lanes) || []
+  var units = (toArray(afcStatus && afcStatus.units) || []).map(function(u) { return "AFC_" + String(u) })
+  var out = {}
+  for (var i = 0; i < lanes.length; i++) {
+    var lane = String(lanes[i])
+    var best = "", bestRank = 99
+    for (var j = 0; j < objects.length; j++) {
+      var obj = String(objects[j])
+      var space = obj.indexOf(" ")
+      if (space < 0 || obj.slice(space + 1) !== lane || obj.indexOf("AFC_") !== 0) continue
+      if (units.indexOf(obj) >= 0) continue
+      var rank = AFC_LANE_TYPES.indexOf(obj.slice(0, space))
+      if (rank < 0) rank = AFC_LANE_TYPES.length
+      if (rank < bestRank) { best = obj; bestRank = rank }
+    }
+    if (best !== "") out[lane] = best
+  }
+  return out
+}
+
+// Encoded query parts for the AFC object and the lanes, trimmed to the
+// fields the widget uses.
+function afcQuery(laneObjects) {
+  var parts = ["AFC=" + AFC_FIELDS.join(",")]
+  for (var lane in laneObjects)
+    parts.push(encodeURIComponent(laneObjects[lane]) + "=" + AFC_LANE_FIELDS.join(","))
+  return parts
+}
+
+// "#rrggbb" from AFC's "#RRGGBB", "RRGGBB", or "#RGB"; "" when unusable.
+function normalizeColor(value) {
+  var c = String(value || "").trim().replace(/^#/, "")
+  if (/^[0-9a-f]{3}$/i.test(c)) c = c.replace(/(.)/g, "$1$1")
+  return /^[0-9a-f]{6}$/i.test(c) ? "#" + c.toLowerCase() : ""
+}
+
+// Whether dark text reads better than light text on this color.
+function isLightColor(hex) {
+  var c = normalizeColor(hex)
+  if (c === "") return false
+  var r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16)
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150
+}
+
+function formatWeight(grams) {
+  var g = Number(grams)
+  if (!isFinite(g) || g <= 0) return ""
+  return g >= 1000 ? (g / 1000).toFixed(g >= 10000 ? 0 : 1) + " kg" : Math.round(g) + " g"
+}
+
+// Reduced changer state, or null when the printer has no AFC.
+//   lanes:    [{ name, tool, material, colors, weight, ready, loaded, status }]
+//   changing: filament is being moved; stage 0 unload, 1 load, 2 resume
+function afcState(status, laneObjects) {
+  var afc = status && status.AFC
+  if (!afc) return null
+  var names = toArray(afc.lanes) || []
+  var lanes = []
+  for (var i = 0; i < names.length; i++) {
+    var name = String(names[i])
+    var l = (laneObjects && laneObjects[name] && status[laneObjects[name]]) || {}
+    var colors = (toArray(l.multi_color_hexes) || []).map(normalizeColor).filter(function(c) { return c !== "" })
+    if (colors.length === 0 && normalizeColor(l.color) !== "") colors = [normalizeColor(l.color)]
+    lanes.push({
+      name: name,
+      tool: String(l.map || ""),
+      material: String(l.filament_name || l.material || ""),
+      colors: colors,
+      weight: Number(l.weight) || 0,
+      ready: l.load === true && l.prep === true,
+      loaded: name === afc.current_load,
+      status: l.status && l.status !== "None" ? String(l.status) : ""
+    })
+  }
+  var state = String(afc.current_state || "")
+  var target = afc.next_lane ? String(afc.next_lane) : ""
+  var moving = afc.current_lane ? String(afc.current_lane) : ""
+  var changing = target !== "" || AFC_BUSY.indexOf(state) >= 0
+  var stage = state === "Unloading" ? 0 : state === "Restoring" ? 2 : 1
+  var msg = afc.message && afc.message.message ? String(afc.message.message) : ""
+  return {
+    lanes: lanes,
+    loaded: afc.current_load ? String(afc.current_load) : "",
+    state: state,
+    changing: changing,
+    stage: stage,
+    target: target,
+    // Lane being moved right now (unload: the old one, load: the new one).
+    moving: moving !== "" ? moving : (stage === 0 ? String(afc.current_load || "") : target),
+    toolchange: Number(afc.current_toolchange) || 0,
+    toolchanges: Number(afc.number_of_toolchanges) || 0,
+    error: afc.error_state === true,
+    message: msg,
+    messageType: afc.message && afc.message.type ? String(afc.message.type) : "",
+    bypass: afc.bypass_state === true
+  }
+}
+
+function afcLane(afc, name) {
+  if (!afc || !name) return null
+  for (var i = 0; i < afc.lanes.length; i++)
+    if (afc.lanes[i].name === name) return afc.lanes[i]
+  return null
+}
+
+// Short label for a lane: its tool ("T2") or, without a map, its name.
+function laneLabel(lane) {
+  return lane ? (lane.tool || lane.name) : ""
+}
+
+// The step AFC is on, for the change card.
+function afcStepLabel(afc) {
+  if (!afc || !afc.changing) return ""
+  var lane = afcLane(afc, afc.moving)
+  if (lane && lane.status !== "") return lane.status
+  switch (afc.state) {
+  case "Unloading": return "Unloading"
+  case "Loading": return "Loading"
+  case "Restoring": return "Purging and resuming"
+  case "Ejecting": return "Ejecting"
+  case "Moving": return "Moving lane"
+  default: return afc.state || "Preparing"
+  }
 }
 
 // ---------- Webcams ----------
@@ -330,9 +476,12 @@ function barText(data, display, temps) {
     : data.state === "error" ? ICONS.alert
     : data.state === "complete" ? ICONS.check
     : ICONS.printer
+  if (data.changing) icon = ICONS.swap
   parts.push(icon)
 
-  if (mode !== "icon" && data.heating) {
+  if (data.changing && mode !== "icon") {
+    parts.push(data.changeTarget ? "→ " + data.changeTarget : "Changing")
+  } else if (mode !== "icon" && data.heating) {
     parts.push(ICONS.heat + " Heating")
   } else if (mode !== "icon" && active) {
     parts.push(Math.floor(data.progress * 100) + "%")

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- New: filament changer support for [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On)
+  (Elegoo Canvas, Box Turtle, Night Owl, …). The popup lists every lane with its
+  color, tool, material, and remaining weight, and highlights the one in the
+  toolhead. During a tool change it shows the old and new filament, the
+  Unload → Load → Resume stage with AFC's current step, and "change 3 of 12";
+  the bar chip shows the target tool. AFC errors appear in the message line.
+  New setting: `showFilament` (also a toggle in the popup). `status` gains a
+  `filament` object. The mock printer gains `--afc` and three tool-change scenarios.
 - New: the printer's camera in the popup. Webcams come from Mainsail/Fluidd
   (`/server/webcams/list`). Snapshots are fetched one at a time, about once a
   second, and only while the popup is open. Rotation and flips from the webcam

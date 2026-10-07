@@ -41,6 +41,24 @@ SCENARIOS = {
     "klippy-startup":   ("standby",   0.00, "startup",  (0, 0, 0),     ""),
     "klippy-shutdown":  ("standby",   0.00, "shutdown", (0, 0, 0),     "Lost communication with MCU 'mcu'"),
     "klippy-disconnected": (None,     0.00, None,       (0, 0, 0),     "Klippy Disconnected"),
+    # Filament changer (--afc): a print at 42% in the middle of change 3 of 12.
+    "toolchange-unload": ("printing", 0.42, "ready",    (220, 90, 45), ""),
+    "toolchange-load":  ("printing",  0.42, "ready",    (220, 90, 45), ""),
+    "toolchange-resume": ("printing", 0.42, "ready",    (220, 90, 45), ""),
+}
+
+# Elegoo Canvas style AFC unit: name, tool, material, color, grams, ready.
+AFC_LANES = [
+    ("CANVAS_1", "T0", "PETG", "#212121", 980.4, True),
+    ("CANVAS_2", "T1", "TPU", "#F5F5F5", 0, True),
+    ("CANVAS_3", "T2", "PLA", "#E64A19", 1000, True),
+    ("CANVAS_4", "T3", "PLA", "", 0, False),
+]
+# scenario -> (AFC state, loaded lane, lane being moved, target, moving lane's status)
+AFC_CHANGES = {
+    "toolchange-unload": ("Unloading", "CANVAS_1", "CANVAS_1", "CANVAS_3", "Tool Unloading"),
+    "toolchange-load": ("Loading", None, "CANVAS_3", "CANVAS_3", "HUB Loading"),
+    "toolchange-resume": ("Restoring", "CANVAS_3", None, "CANVAS_3", "Tool Loaded"),
 }
 
 # Misbehaving-server scenarios: a normal print, except for the abuse named.
@@ -175,6 +193,26 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # noqa: BLE001
             self.send_error(502, str(e))
 
+    def afc_status(self):
+        state, loaded, moving, target, lane_status = AFC_CHANGES.get(
+            scenario["name"], ("Idle", "CANVAS_1", None, None, ""))
+        changing = scenario["name"] in AFC_CHANGES
+        out = {"AFC": {
+            "current_load": loaded, "current_lane": moving, "next_lane": target,
+            "current_state": state, "current_toolchange": 3 if changing else 0,
+            "number_of_toolchanges": 12 if changing else 0, "error_state": False,
+            "message": {"message": "", "type": ""}, "lanes": [l[0] for l in AFC_LANES],
+            "units": ["canvas CANVAS_1"], "bypass_state": False,
+        }}
+        for i, (name, tool, material, color, grams, ready) in enumerate(AFC_LANES):
+            out["AFC_lane " + name] = {
+                "lane": i + 1, "map": tool, "load": ready, "prep": ready,
+                "tool_loaded": name == loaded, "material": material, "color": color,
+                "filament_name": "", "multi_color_hexes": [], "weight": grams,
+                "status": lane_status if name == moving else "None",
+            }
+        return out
+
     def status(self):
         name = scenario["name"] if scenario["name"] in SCENARIOS else "printing"
         state, progress, klippy, targets, message = SCENARIOS[name]
@@ -200,6 +238,7 @@ class Handler(BaseHTTPRequestHandler):
             "extruder": {"temperature": nozzle, "target": targets[0]},
             "heater_bed": {"temperature": bed, "target": targets[1]},
             "heater_generic chamber": {"temperature": chamber, "target": targets[2]},
+            **(self.afc_status() if args.afc else {}),
         }
 
     def do_GET(self):
@@ -215,8 +254,12 @@ class Handler(BaseHTTPRequestHandler):
             tokens.add(token)
             self.send_json(token)
         elif path == "/printer/objects/list":
-            self.send_json({"objects": ["print_stats", "virtual_sdcard", "display_status", "extruder",
-                                        "heater_bed", "webhooks", "heater_generic chamber"]})
+            objects = ["print_stats", "virtual_sdcard", "display_status", "extruder",
+                       "heater_bed", "webhooks", "heater_generic chamber"]
+            if args.afc:
+                objects += ["AFC", "AFC_canvas CANVAS_1", "AFC_hub toolhead_4way_hub", "AFC_extruder extruder"]
+                objects += ["AFC_lane " + l[0] for l in AFC_LANES] + ["AFC_canvas_lane " + l[0] for l in AFC_LANES]
+            self.send_json({"objects": objects})
         elif path == "/printer/objects/query":
             if scenario["name"] == "klippy-disconnected":
                 self.send_err(503, "Klippy Disconnected")
@@ -274,6 +317,7 @@ def main():
     ap.add_argument("--webcam", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "webcam.jpg"),
                     help="JPEG served as the webcam snapshot when there is no --upstream")
     ap.add_argument("--no-webcam", action="store_true", help="report no webcams")
+    ap.add_argument("--afc", action="store_true", help="simulate an AFC filament changer (4-lane Canvas)")
     args = ap.parse_args()
     scenario["name"] = args.scenario
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()

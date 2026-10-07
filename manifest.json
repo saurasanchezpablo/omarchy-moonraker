@@ -5,7 +5,7 @@
   "version": "0.1.2",
   "author": "prodpixa",
   "license": "MIT",
-  "description": "3D printer status for any Klipper/Moonraker printer: progress, time left, and temperatures in the bar with a detail panel and the printer's camera.",
+  "description": "3D printer status for any Klipper/Moonraker printer: progress, time left, and temperatures in the bar with a detail panel, the printer's camera, and filament changer lanes.",
   "kinds": [
     "bar-widget"
   ],
@@ -29,7 +29,8 @@
       "hideWhenIdle": false,
       "hideWhenOffline": false,
       "showCamera": true,
-      "webcam": ""
+      "webcam": "",
+      "showFilament": true
     },
     "schema": [
       {
@@ -114,6 +115,13 @@
         "label": "Webcam name",
         "description": "Which webcam to show, as named in Mainsail/Fluidd. The first one when empty. Click the picture to switch.",
         "defaultValue": ""
+      },
+      {
+        "key": "showFilament",
+        "type": "boolean",
+        "label": "Show filament",
+        "description": "For printers with an AFC filament changer (Box Turtle, Elegoo Canvas, …): show the lanes, the loaded spool, and tool changes in the popup.",
+        "defaultValue": true
       }
     ]
   }

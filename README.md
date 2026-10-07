@@ -17,6 +17,11 @@ Qidi (tested on a Q2), Voron, RatRig, Creality K-series with Klipper, and others
 - **Detail popup**: thumbnail, elapsed/remaining time, finish time, layer, filament, live temperatures
 - **Printer camera** in the popup, from the webcam set up in Mainsail/Fluidd. It
   refreshes about once a second and only while the popup is open, so nothing runs in the background
+- **Filament changer** (AFC: Elegoo Canvas, Box Turtle, Night Owl, …): every
+  lane with its color, tool, material, and remaining weight, which one is in the
+  toolhead, and a live view of tool changes: old → new filament, unload / load /
+  resume, and "change 3 of 12" during multi-color prints. The bar chip shows the
+  target tool while a change runs
 - **Controls**: pause, resume, and cancel (cancel asks you to confirm)
 - **Every printer state is covered**: setup, unreachable, bad API key, Klipper
   starting/shutdown/disconnected, idle, heating, printing, paused, complete,
@@ -111,7 +116,8 @@ The Settings section in the popup writes these values to the widget's entry in
   "hideWhenOffline": false,
   "chamberObject": "",
   "showCamera": true,
-  "webcam": ""
+  "webcam": "",
+  "showFilament": true
 }
 ```
 
@@ -128,6 +134,7 @@ The Settings section in the popup writes these values to the widget's entry in
 | `chamberObject`   | auto                | Klipper object for the chamber temperature, e.g. `temperature_sensor chamber`. Detected automatically when empty. |
 | `showCamera`      | `true`              | Show the printer's webcam in the popup. The toggle appears in Settings when the printer has a webcam. |
 | `webcam`          | first one           | Name of the webcam to show, as set in Mainsail/Fluidd. With several webcams, click the picture to switch. |
+| `showFilament`    | `true`              | Show the filament changer's lanes and tool changes. Only has an effect on printers with [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On). |
 
 The API key is stored in plain text in `shell.json`, like every other Omarchy widget setting.
 
@@ -153,6 +160,14 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","d
     "bed": {"key": "bed", "temperature": 60.1, "target": 60}
   },
   "error": "",
+  "filament": {
+    "loaded": "CANVAS_1", "state": "Idle", "changing": false, "from": "", "to": "", "step": "",
+    "toolchange": 0, "toolchanges": 0, "error": false, "message": "",
+    "lanes": [
+      {"name": "CANVAS_1", "tool": "T0", "material": "PETG", "color": "#212121", "weight": 980.4, "ready": true, "loaded": true},
+      {"name": "CANVAS_2", "tool": "T1", "material": "TPU", "color": "#ffffff", "weight": 0, "ready": true, "loaded": false}
+    ]
+  },
   "camera": {
     "enabled": true, "webcams": ["webcam"], "active": "webcam",
     "snapshot": "/webcam/?action=snapshot", "url": "http://192.168.1.50:8080/?action=snapshot",
@@ -161,7 +176,7 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","d
 }
 ```
 
-`camera.url` is the snapshot address that answered, after resolving relative
+`filament` is `null` on printers without AFC. `camera.url` is the snapshot address that answered, after resolving relative
 URLs and same-host redirects. `streaming` is true only while the popup is open.
 
 The real output is a single line.
@@ -177,6 +192,8 @@ The real output is a single line.
 | *Klipper disconnected / shutdown / starting up* | Moonraker is fine, Klipper isn't. Check the printer's screen or web UI. The message from Klipper is shown under the title. |
 | No chamber temperature | Set `chamberObject` to the right Klipper object (see `/printer/objects/list`). |
 | No thumbnail | The slicer didn't embed one, or Moonraker didn't extract it. |
+| No filament section | The printer has no [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) object. Happy Hare / ERCF and other changers aren't supported yet. |
+| Lane weight missing | AFC doesn't know it: set the spool weight in AFC or Spoolman. |
 | No camera | No enabled webcam is set up in Mainsail/Fluidd, or its service only streams (WebRTC, HLS) and has no snapshot URL. |
 | *HTTP 302 → …* under the camera | The snapshot URL redirects to another host. The widget only follows redirects that stay on the printer's host, so set the webcam's snapshot URL to the final address. |
 

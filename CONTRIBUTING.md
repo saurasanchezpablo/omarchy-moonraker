@@ -42,6 +42,8 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://127.0.0.1:7
 - By default the fake job gets synthesized metadata and `dev/assets/thumbnail.png`.
 - `--upstream`/`--api-key`/`--file`: proxy file metadata and thumbnails to a real printer instead.
 - `--require-key`: reject requests without this key (tests the auth states).
+- `--afc`: simulate a 4-lane Elegoo Canvas (AFC). The `toolchange-unload`,
+  `toolchange-load`, and `toolchange-resume` scenarios show change 3 of 12 from T0 to T2.
 - A webcam named "Mock Cam" serves `dev/assets/webcam.jpg`; `--webcam` picks another JPEG, `--no-webcam` reports none.
 - Pause / resume / cancel from the popup change the mock's state.
 
@@ -54,7 +56,8 @@ curl http://127.0.0.1:7125/mock/scenarios
 
 Scenarios: `idle`, `heating`, `printing-start`, `printing`, `printing-end`,
 `paused`, `complete`, `cancelled`, `error`, `klippy-startup`,
-`klippy-shutdown`, `klippy-disconnected`.
+`klippy-shutdown`, `klippy-disconnected`, and with `--afc`:
+`toolchange-unload`, `toolchange-load`, `toolchange-resume`.
 
 Misbehaving-server scenarios, for checking the response limits: `flood` (endless
 chunked body), `flood-declared` (500 MB `Content-Length`), `hang` (never
@@ -108,6 +111,7 @@ Requirements: `grim`, `jq`, `python-pillow`, and a horizontal bar at the top.
 - [ ] Cancel: the first click arms, the second click within 3 s cancels
 - [ ] Right click cycles the styles and survives `omarchy restart shell`
 - [ ] Middle click opens the web UI
+- [ ] With an AFC changer: every lane shows its color, tool, and material, the loaded one is highlighted, and a tool change walks through Unload → Load → Resume with the right old and new filament
 - [ ] The camera shows within a couple of seconds of opening the popup, updates about once a second, and stops when the popup closes (`status` → `camera.streaming: false`)
 - [ ] `omarchy theme set <other>` repaints the widget and popup
 - [ ] Bar on the left/right edge (vertical): the chip shows the icon only
