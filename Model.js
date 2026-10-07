@@ -71,7 +71,7 @@ function normalizeUrl(raw) {
 // Strict parse of an http(s) URL's authority, or null. Every same-host and
 // same-origin decision goes through here, so it refuses anything another
 // parser (curl's) could read differently: several "@", backslashes, spaces,
-// or unusual host characters.
+// "%" escapes, or other punctuation in the host.
 //   { scheme, user, host, port, explicitPort, origin }
 function parseUrl(url) {
   var m = String(url || "").match(/^(https?):\/\/([^\/?#]*)/i)
@@ -80,7 +80,8 @@ function parseUrl(url) {
   var at = auth.indexOf("@")
   if (at !== auth.lastIndexOf("@")) return null
   var user = at >= 0 ? auth.slice(0, at) : ""
-  var hm = auth.slice(at + 1).match(/^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::(\d{1,5}))?$/)
+  // Underscores and non-ASCII (IDN) names are real hostnames curl accepts.
+  var hm = auth.slice(at + 1).match(/^([A-Za-z0-9._~\-\u00a0-\uffff]+|\[[0-9A-Fa-f:.]+\])(?::(\d{1,5}))?$/)
   if (!hm) return null
   var scheme = m[1].toLowerCase()
   var host = hm[1].toLowerCase()
