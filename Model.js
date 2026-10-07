@@ -7,6 +7,13 @@
 // the data streams in, so a broken or hostile endpoint can't make the shell
 // buffer an unbounded response or hold a request open forever.
 var MAX_JSON_BYTES = 1048576      // Moonraker replies are a few KB
+// Lists the printer sends are cut to these lengths before anything builds UI
+// or queries from them, so a broken or hostile Moonraker can't stall the shell.
+var MAX_LANES = 16
+var MAX_WEBCAMS = 8
+var MAX_SPOOLS = 200
+var MAX_EXCLUDE_OBJECTS = 256
+var MAX_PRINTER_OBJECTS = 4000
 var MAX_IMAGE_BYTES = 2097152     // slicer thumbnails are tens of KB
 var MAX_SNAPSHOT_BYTES = 4194304  // a 1080p webcam JPEG is a few hundred KB
 var REQUEST_TIMEOUT_S = 10
@@ -82,6 +89,12 @@ function parseUrl(url) {
     scheme: scheme, user: user, host: host, port: port, explicitPort: !!hm[2],
     origin: scheme + "://" + host + ":" + port
   }
+}
+
+function isLoopbackHost(host) {
+  var h = String(host || "").toLowerCase()
+  return h === "localhost" || /\.localhost$/.test(h) || /^127\./.test(h)
+    || h === "0.0.0.0" || h === "[::1]" || h === "[::]" || /^\[::ffff:127\./.test(h)
 }
 
 // "scheme://host:port" (default ports spelled out), "" when unparsable.
@@ -257,7 +270,11 @@ function thumbnailPath(filename, metadata) {
   var file = String(filename || "")
   var slash = file.lastIndexOf("/")
   var dir = slash >= 0 ? file.slice(0, slash + 1) : ""
-  return dir + best.relative_path
+  var path = dir + String(best.relative_path)
+  // Stay inside the gcodes root: curl would resolve "..", and the request
+  // carries the API key.
+  if (path.charAt(0) === "/" || path.split("/").indexOf("..") >= 0) return ""
+  return path
 }
 
 // ---------- Chamber light ----------
@@ -363,9 +380,17 @@ function excludeNames(objects) {
   var out = []
   for (var i = 0; i < list.length; i++) {
     var n = list[i] && list[i].name !== undefined ? String(list[i].name) : ""
-    if (n !== "" && /^[^\s;\x00-\x1f]+$/.test(n)) out.push(n)
+    if (safeObjectName(n)) out.push(n)
+    if (out.length >= MAX_EXCLUDE_OBJECTS) break
   }
   return out
+}
+
+// Klipper's extended-command parser ends the arguments at "#", "*", or ";"
+// and splits them with shlex (quotes, backslashes), so a name containing any
+// of those would make EXCLUDE_OBJECT act on a different object.
+function safeObjectName(n) {
+  return n !== "" && n.length <= 256 && /^[^\s;#*"'\\\x00-\x1f\x7f]+$/.test(n)
 }
 
 // Readable label for a slicer object name: OrcaSlicer/PrusaSlicer's
@@ -378,7 +403,7 @@ function objectLabel(name) {
 }
 
 function excludeCommand(name) {
-  return excludeNames([{ name: name }]).length === 1 ? "EXCLUDE_OBJECT NAME=" + name : ""
+  return safeObjectName(String(name || "")) ? "EXCLUDE_OBJECT NAME=" + name : ""
 }
 
 // ---------- Spoolman ----------
@@ -409,13 +434,13 @@ function spoolInfo(spool) {
 
 // Picker list: unarchived spools, the active one first, then most recently used.
 function spoolList(spools, activeId) {
-  var out = (toArray(spools) || []).map(spoolInfo).filter(function(s) { return s && !s.archived })
+  var out = (toArray(spools) || []).slice(0, MAX_SPOOLS * 2).map(spoolInfo).filter(function(s) { return s && !s.archived })
   out.sort(function(a, b) {
     if (a.id === activeId) return -1
     if (b.id === activeId) return 1
     return a.lastUsed < b.lastUsed ? 1 : a.lastUsed > b.lastUsed ? -1 : a.id - b.id
   })
-  return out
+  return out.slice(0, MAX_SPOOLS)
 }
 
 // AFC's per-lane Spoolman assignment; id < 0 clears the lane. "" when the
@@ -494,8 +519,8 @@ var AFC_BUSY = ["Loading", "Unloading", "ToolSwap", "ToolDock", "ToolPickup", "E
 
 // lane name -> Klipper object name, from the printer's object list.
 function afcLaneObjects(objects, afcStatus) {
-  objects = toArray(objects) || []
-  var lanes = toArray(afcStatus && afcStatus.lanes) || []
+  objects = (toArray(objects) || []).slice(0, MAX_PRINTER_OBJECTS)
+  var lanes = (toArray(afcStatus && afcStatus.lanes) || []).slice(0, MAX_LANES)
   var units = (toArray(afcStatus && afcStatus.units) || []).map(function(u) { return "AFC_" + String(u) })
   var out = {}
   for (var i = 0; i < lanes.length; i++) {
@@ -551,7 +576,7 @@ function formatWeight(grams) {
 function afcState(status, laneObjects) {
   var afc = status && status.AFC
   if (!afc) return null
-  var names = toArray(afc.lanes) || []
+  var names = (toArray(afc.lanes) || []).slice(0, MAX_LANES)
   var lanes = []
   for (var i = 0; i < names.length; i++) {
     var name = String(names[i])
@@ -627,7 +652,7 @@ function afcStepLabel(afc) {
 function webcamList(result) {
   var cams = toArray(result && result.webcams) || []
   var out = []
-  for (var i = 0; i < cams.length; i++) {
+  for (var i = 0; i < cams.length && out.length < MAX_WEBCAMS; i++) {
     var c = cams[i]
     if (!c || c.enabled === false) continue
     var snapshot = snapshotPath(c)
@@ -674,7 +699,13 @@ function pickWebcam(list, name) {
 // and Fluidd serve /webcam/ from the web UI (nginx), not from Moonraker's 7125.
 function snapshotCandidates(baseUrl, snapshot) {
   var snap = String(snapshot || "")
-  if (/^https?:\/\//i.test(snap)) return [snap]
+  if (/^https?:\/\//i.test(snap)) {
+    // Webcams on another host are fine, but the printer's config must not be
+    // able to aim the desktop's requests at its own local services.
+    var cam = parseUrl(snap), base = parseUrl(baseUrl)
+    if (!cam || (isLoopbackHost(cam.host) && !(base && isLoopbackHost(base.host)))) return []
+    return [snap]
+  }
   if (/^[a-z][a-z0-9+.-]*:/i.test(snap)) return []   // rtsp:, webrtc:, …
   var p = parseUrl(baseUrl)
   if (!p || snap === "") return []
@@ -750,7 +781,7 @@ function barText(data, display, temps) {
 // A value for curl's config file syntax. Newlines are dropped so a value can
 // never start a new config line (and with it, a new option).
 function curlQuote(value) {
-  return "\"" + String(value).replace(/[\r\n]/g, "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\""
+  return "\"" + String(value).replace(/[\x00-\x1f\x7f]/g, "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\""
 }
 
 // Config fed to `curl --config -` on stdin, so the URL and API key never
