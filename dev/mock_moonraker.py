@@ -74,7 +74,9 @@ ABUSE = {
 args = None
 scenario = {"name": "printing"}
 # State changed by G-code sent through /printer/gcode/script.
-machine = {"light": 1.0, "pause_next": False, "pause_at": 0}
+machine = {"light": 1.0, "pause_next": False, "pause_at": 0, "excluded": []}
+MOCK_OBJECTS = ["calibration_cube.stl_id_0_copy_0", "calibration_cube.stl_id_0_copy_1",
+                "benchy.stl_id_1_copy_0", "clip.stl_id_2_copy_0"]
 gcode_log = []
 tokens = set()
 
@@ -243,6 +245,14 @@ class Handler(BaseHTTPRequestHandler):
             "heater_bed": {"temperature": bed, "target": targets[1]},
             "heater_generic chamber": {"temperature": chamber, "target": targets[2]},
             "led case": {"color_data": [[0.0, 0.0, 0.0, machine["light"]]]},
+            "exclude_object": {
+                "objects": [{"name": n, "center": [60 + 40 * i, 110],
+                             "polygon": [[40 + 40 * i, 90], [80 + 40 * i, 90], [80 + 40 * i, 130], [40 + 40 * i, 130]]}
+                            for i, n in enumerate(MOCK_OBJECTS)] if has_file else [],
+                "excluded_objects": machine["excluded"] if has_file else [],
+                "current_object": next((n for n in MOCK_OBJECTS if n not in machine["excluded"]), None)
+                if active else None,
+            },
             "gcode_macro SET_PRINT_STATS_INFO": {
                 "pause_next_layer": {"enable": machine["pause_next"], "call": "PAUSE"},
                 "pause_at_layer": {"enable": machine["pause_at"] > 0, "layer": machine["pause_at"], "call": "PAUSE"},
@@ -265,7 +275,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/printer/objects/list":
             objects = ["print_stats", "virtual_sdcard", "display_status", "extruder",
                        "heater_bed", "webhooks", "heater_generic chamber", "led case", "led hotend",
-                       "gcode_macro SET_PRINT_STATS_INFO", "gcode_macro SET_PAUSE_AT_LAYER",
+                       "exclude_object", "gcode_macro SET_PRINT_STATS_INFO", "gcode_macro SET_PAUSE_AT_LAYER",
                        "gcode_macro SET_PAUSE_NEXT_LAYER"]
             if args.afc:
                 objects += ["AFC", "AFC_canvas CANVAS_1", "AFC_hub toolhead_4way_hub", "AFC_extruder extruder"]
@@ -298,6 +308,9 @@ class Handler(BaseHTTPRequestHandler):
             machine["light"] = float(params.get("WHITE", 0))
         elif words and words[0] == "SET_PAUSE_AT_LAYER":
             machine["pause_at"] = int(params["LAYER"]) if "LAYER" in params else 0
+        elif words and words[0] == "EXCLUDE_OBJECT" and params.get("NAME") in MOCK_OBJECTS:
+            if params["NAME"] not in machine["excluded"]:
+                machine["excluded"].append(params["NAME"])
         elif words and words[0] == "SET_PAUSE_NEXT_LAYER":
             machine["pause_next"] = params.get("ENABLE", "1") != "0"
         return "ok"

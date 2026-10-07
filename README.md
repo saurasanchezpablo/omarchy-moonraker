@@ -24,9 +24,12 @@ Qidi (tested on a Q2), Voron, RatRig, Creality K-series with Klipper, and others
   resume, and "change 3 of 12" during multi-color prints. The bar chip shows the
   target tool while a change runs
 - **Controls**: pause, resume, and cancel (cancel asks you to confirm)
-- **Print tools** (the Tools button while printing, or `t`): pause at a chosen
-  layer or after the current one, e.g. to drop in magnets or nuts. Needs the
-  standard Mainsail/Fluidd pause macros and a slicer that reports layers
+- **Print tools** (the Tools button while printing, or `t`):
+  - pause at a chosen layer or after the current one, e.g. to drop in magnets
+    or nuts (needs the standard Mainsail/Fluidd pause macros and a slicer that
+    reports layers)
+  - skip one object of a multi-part plate when it fails, and keep printing the
+    rest (needs `[exclude_object]` and a slicer that labels objects)
 - **Desktop notifications** when a print finishes, pauses (e.g. filament
   runout), fails, or has 10 minutes left, and when Klipper or the filament
   changer stops with an error, with a camera snapshot attached so you can see
@@ -161,6 +164,7 @@ omarchy-shell io.github.prodpixa.moonraker refresh         # poll now
 omarchy-shell io.github.prodpixa.moonraker cycleDisplay    # next bar style
 omarchy-shell io.github.prodpixa.moonraker toggleLight     # chamber light on/off
 omarchy-shell io.github.prodpixa.moonraker pauseAtLayer 120 # pause when layer 120 starts (0 clears)
+omarchy-shell io.github.prodpixa.moonraker skipObject NAME # skip one object of the running print
 omarchy-shell io.github.prodpixa.moonraker showTools       # open the popup on the print tools
 omarchy-shell io.github.prodpixa.moonraker status          # JSON snapshot (never includes the API key)
 omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","display":"full"}'
@@ -179,6 +183,7 @@ omarchy-shell io.github.prodpixa.moonraker configure '{"url":"http://printer","d
   "error": "",
   "light": {"object": "led case", "on": true},
   "pause": {"nextLayer": false, "atLayer": 0},
+  "objects": {"all": ["part_id_0_copy_0", "part_id_0_copy_1"], "skipped": [], "current": "part_id_0_copy_0"},
   "filament": {
     "loaded": "CANVAS_1", "state": "Idle", "changing": false, "from": "", "to": "", "step": "",
     "toolchange": 0, "toolchanges": 0, "error": false, "message": "",
@@ -213,7 +218,7 @@ The real output is a single line.
 | No thumbnail | The slicer didn't embed one, or Moonraker didn't extract it. |
 | No filament section | The printer has no [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) object. Happy Hare / ERCF and other changers aren't supported yet. |
 | Lane weight missing | AFC doesn't know it: set the spool weight in AFC or Spoolman. |
-| No Tools button | The printer lacks the `SET_PAUSE_AT_LAYER`/`SET_PAUSE_NEXT_LAYER` macros (they come with Mainsail's and Fluidd's configs), or the slicer doesn't call `SET_PRINT_STATS_INFO` with layer numbers. |
+| No Tools button | Nothing applies to this print: it has a single object (or the slicer didn't label objects for `[exclude_object]`), and the printer lacks the `SET_PAUSE_AT_LAYER`/`SET_PAUSE_NEXT_LAYER` macros (they come with Mainsail's and Fluidd's configs), or the slicer doesn't call `SET_PRINT_STATS_INFO` with layer numbers. |
 | No camera | No enabled webcam is set up in Mainsail/Fluidd, or its service only streams (WebRTC, HLS) and has no snapshot URL. |
 | *HTTP 302 → …* under the camera | The snapshot URL redirects to another host. The widget only follows redirects that stay on the printer's host, so set the webcam's snapshot URL to the final address. |
 

@@ -72,6 +72,14 @@ Panel {
   // Pause at layer: whether the printer has the macros, and the plan.
   property bool pauseMacros: false
   property var pausePlan: ({ nextLayer: false, atLayer: 0 })
+  // Skip object: support, the job's object names (fetched once per file,
+  // since the full list carries polygons), and the live skipped/current.
+  property bool excludeSupported: false
+  property var excludeObjects: []
+  property string excludeFor: ""
+  property var excludedObjects: []
+  property string currentObject: ""
+  property string skipArmed: ""
   property var afc: null
   // Lane loaded when the current change started; AFC forgets it once unloaded.
   property string changeOrigin: ""
@@ -158,7 +166,9 @@ Panel {
   readonly property bool iconOnly: barLabel.indexOf(" ") < 0
   // Layer-based tools only work when the slicer reports layers.
   readonly property bool canPauseAtLayer: pauseMacros && printing && totalLayer > 0
-  readonly property bool hasTools: canPauseAtLayer
+  // Skipping the only object would just cancel the print.
+  readonly property bool canSkip: excludeSupported && printing && excludeObjects.length > 1
+  readonly property bool hasTools: canPauseAtLayer || canSkip
 
   readonly property string heroStatus: {
     if (!configured) return "Not configured"
@@ -298,6 +308,7 @@ Panel {
     var extra = afcObjects.length > 0 ? Model.afcQuery(afcLaneObjects) : []
     if (light) extra.push(encodeURIComponent(light.object) + "=" + (light.kind === "pin" ? "value" : "color_data"))
     if (pauseMacros) extra.push(encodeURIComponent(Model.PAUSE_MACROS) + "=pause_next_layer,pause_at_layer")
+    if (excludeSupported) extra.push("exclude_object=excluded_objects,current_object")
     inflight = request("GET", Model.queryPath(chamberObject, extra), function(err, result) {
       root.inflight = null
       if (err) {
@@ -330,6 +341,7 @@ Panel {
       root.chamberObject = Model.pickChamberObject(objects, root.setting("chamberObject", ""))
       root.light = Model.pickLight(objects, root.setting("lightObject", ""))
       root.pauseMacros = Model.hasPauseMacros(objects)
+      root.excludeSupported = objects.indexOf("exclude_object") >= 0
       root.afcObjects = objects.indexOf("AFC") >= 0
         ? objects.filter(function(o) { return String(o).indexOf("AFC_") === 0 }) : []
       root.objectsProbed = true
@@ -376,6 +388,11 @@ Panel {
     }
     if (light && !lightBusy) lightOn = Model.lightIsOn(light, status)
     if (pauseMacros) pausePlan = Model.pausePlan(status)
+    if (excludeSupported && status.exclude_object) {
+      excludedObjects = Model.toArray(status.exclude_object.excluded_objects) || []
+      currentObject = String(status.exclude_object.current_object || "")
+    }
+    if (excludeSupported && Model.isActiveState(printState) && excludeFor !== filename) loadExcludeObjects()
 
     var prevAfc = afc
     afc = Model.afcState(status, afcLaneObjects)
@@ -616,6 +633,11 @@ Panel {
     lightOn = false
     pauseMacros = false
     pausePlan = ({ nextLayer: false, atLayer: 0 })
+    excludeSupported = false
+    excludeObjects = []
+    excludeFor = ""
+    excludedObjects = []
+    currentObject = ""
     toolsOpen = false
     thumbnailSource = ""
     thumbnailFor = ""
@@ -649,6 +671,33 @@ Panel {
       }
       root.poll()
     })
+  }
+
+  function loadExcludeObjects() {
+    var file = filename
+    excludeFor = file
+    excludeObjects = []
+    request("GET", "/printer/objects/query?exclude_object=objects", function(err, result) {
+      if (root.excludeFor !== file) return
+      if (err) {
+        root.excludeFor = ""   // retried on the next status
+        return
+      }
+      var eo = result && result.status ? result.status.exclude_object : null
+      root.excludeObjects = Model.excludeNames(eo ? eo.objects : [])
+    })
+  }
+
+  // First click arms, a second within 3 s skips (like Cancel).
+  function requestSkip(name) {
+    if (skipArmed !== name) {
+      skipArmed = name
+      skipDisarm.restart()
+      return
+    }
+    skipArmed = ""
+    userActionAt = Date.now()
+    sendGcode(Model.excludeCommand(name))
   }
 
   // Fire-and-forget G-code from the popup; the next poll shows the result.
@@ -694,6 +743,7 @@ Panel {
     if (opened) {
       settingsOpen = !configured || authFailed
       cancelArmed = false
+      skipArmed = ""
       if (!printing) toolsOpen = false
       urlField.text = setting("url", "")
       keyField.text = setting("apiKey", "")
@@ -772,6 +822,14 @@ Panel {
     function toggleLight(): void { root.toggleLight() }
     // Pause when this layer starts; 0 clears it.
     function pauseAtLayer(layer: int): void { root.sendGcode(Model.pauseAtLayerCommand(layer)) }
+    // Skip one object of the running print (no confirmation: scripts mean it).
+    function skipObject(name: string): string {
+      var cmd = Model.excludeCommand(name)
+      if (cmd === "" || root.excludeObjects.indexOf(name) < 0) return "unknown object"
+      root.userActionAt = Date.now()
+      root.sendGcode(cmd)
+      return "ok"
+    }
     // Merge settings from a JSON object, e.g. '{"url":"http://printer","display":"full"}'.
     function configure(json: string): string {
       var patch
@@ -802,6 +860,8 @@ Panel {
         remaining: root.remaining, temps: root.temps, error: root.lastError,
         light: root.light ? { object: root.light.object, on: root.lightOn } : null,
         pause: root.pauseMacros ? { nextLayer: root.pausePlan.nextLayer, atLayer: root.pausePlan.atLayer } : null,
+        objects: root.excludeSupported && root.excludeObjects.length > 0
+          ? { all: root.excludeObjects, skipped: root.excludedObjects, current: root.currentObject } : null,
         filament: root.afc === null ? null : {
           loaded: root.afc.loaded, state: root.afc.state, changing: root.changing,
           from: root.changeFrom ? root.changeFrom.name : "", to: root.changeTo ? root.changeTo.name : "",
@@ -833,6 +893,12 @@ Panel {
   Timer {
     id: cameraTimer
     onTriggered: root.loadCameraFrame()
+  }
+
+  Timer {
+    id: skipDisarm
+    interval: 3000
+    onTriggered: root.skipArmed = ""
   }
 
   Timer {
@@ -1484,6 +1550,78 @@ Panel {
             fontFamily: root.fontFamily
             bordered: true
             onClicked: root.sendGcode(Model.pauseNextLayerCommand(!root.pausePlan.nextLayer))
+          }
+
+          PanelSectionHeader {
+            visible: root.canSkip
+            text: "OBJECTS  ·  " + (root.excludeObjects.length - root.excludedObjects.length)
+              + " OF " + root.excludeObjects.length + " PRINTING"
+            foreground: root.fg
+            fontFamily: root.fontFamily
+          }
+
+          // One row per object; long plates scroll after six rows.
+          ListView {
+            id: objectList
+            visible: root.canSkip
+            width: parent.width
+            readonly property real rowHeight: Style.space(32)
+            height: Math.min(count, 6) * rowHeight
+            clip: true
+            interactive: count > 6
+            model: root.excludeObjects
+
+            delegate: Item {
+              required property string modelData
+              readonly property bool skipped: root.excludedObjects.indexOf(modelData) >= 0
+              readonly property bool current: root.currentObject === modelData
+              width: objectList.width
+              height: objectList.rowHeight
+
+              Text {
+                anchors.left: parent.left
+                anchors.right: skipButton.left
+                anchors.rightMargin: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: (current ? "\u25CF  " : "") + Model.objectLabel(modelData)
+                color: root.fg
+                opacity: skipped ? 0.4 : 1
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.strikeout: skipped
+                font.bold: current
+                elide: Text.ElideRight
+              }
+
+              Button {
+                id: skipButton
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !skipped
+                iconText: Model.ICONS.skip
+                text: root.skipArmed === modelData ? "Confirm" : "Skip"
+                active: root.skipArmed === modelData
+                fontSize: Style.font.caption
+                foreground: root.fg
+                fontFamily: root.fontFamily
+                bordered: true
+                verticalPadding: Style.space(2)
+                onClicked: root.requestSkip(modelData)
+              }
+
+              Text {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                visible: skipped
+                textFormat: Text.PlainText
+                text: "Skipped"
+                color: root.fg
+                opacity: 0.5
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+            }
           }
         }
 

@@ -10,6 +10,9 @@
   chosen layer or after the current one, using the standard Mainsail/Fluidd
   macros. A planned pause shows as "Pauses at" in the job details. IPC:
   `pauseAtLayer`, `showTools`.
+- New: skip a failed object and keep printing the rest (Tools → Objects, with
+  `[exclude_object]`). Shows which object is printing now and which are
+  skipped; skipping needs a second click. IPC: `skipObject`.
 - New: a bulb on the camera picture switches the chamber light (also `l` in
   the popup and the `toggleLight` IPC call). The light is detected from the
   printer's LED objects; setting: `lightObject`.

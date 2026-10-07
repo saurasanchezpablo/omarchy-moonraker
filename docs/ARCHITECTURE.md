@@ -67,6 +67,7 @@ until it crashes. curl closes the connection when a limit is hit.
 | Popup open, when the job has a thumbnail | `GET /server/files/gcodes/<thumb>`, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/` and shown from there |
 | Pause / Resume / Cancel | `POST /printer/print/pause`, `/resume`, `/cancel` |
 | Popup open | `GET /server/webcams/list`: webcams configured in Mainsail/Fluidd |
+| A new print starts (with `[exclude_object]`) | `GET /printer/objects/query?exclude_object=objects`: object names, once per file |
 | Light button | `POST /printer/gcode/script?script=SET_LED …` or `SET_PIN …` |
 | While the popup is open | `GET <snapshot_url>`, one frame at a time, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker/camera-{0,1}` |
 
@@ -160,6 +161,15 @@ reaches it. When all three macros exist, those two variables join the status
 query. The Tools button appears only while printing with known layers.
 Commands are built from integers only (`SET_PAUSE_AT_LAYER LAYER=120`,
 `ENABLE=0` to clear, `SET_PAUSE_NEXT_LAYER ENABLE=1`).
+
+### Print tools: skip object
+
+With `[exclude_object]`, each poll adds `exclude_object=excluded_objects,current_object`.
+The object list itself carries polygons and can be large, so it is fetched once
+per file. Names that couldn't be a `NAME=` parameter (whitespace, `;`, control
+characters) are dropped. The list shows only for plates with more than one
+object, since skipping the only one equals cancelling. Skip needs a second
+click within 3 s, like Cancel, and sends `EXCLUDE_OBJECT NAME=<name>`.
 
 ### Notifications
 

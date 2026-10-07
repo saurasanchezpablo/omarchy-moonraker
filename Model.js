@@ -49,7 +49,8 @@ var ICONS = {
   lightOn: "\u{F0335}",   // nf-md-lightbulb
   lightOff: "\u{F0336}",  // nf-md-lightbulb_outline
   tools: "\u{F1064}",     // nf-md-tools
-  layers: "\u{F0F58}"     // nf-md-layers_triple
+  layers: "\u{F0F58}",    // nf-md-layers_triple
+  skip: "\u{F015A}"       // nf-md-close_circle_outline
 }
 
 function normalizeUrl(raw) {
@@ -327,6 +328,33 @@ function pauseAtLayerCommand(layer) {
 
 function pauseNextLayerCommand(enable) {
   return "SET_PAUSE_NEXT_LAYER ENABLE=" + (enable ? 1 : 0)
+}
+
+// ---------- Skip object (exclude_object) ----------
+
+// Object names from exclude_object.objects; names Klipper couldn't take as
+// a NAME= parameter (whitespace, ';', control characters) are left out.
+function excludeNames(objects) {
+  var list = toArray(objects) || []
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    var n = list[i] && list[i].name !== undefined ? String(list[i].name) : ""
+    if (n !== "" && /^[^\s;\x00-\x1f]+$/.test(n)) out.push(n)
+  }
+  return out
+}
+
+// Readable label for a slicer object name: OrcaSlicer/PrusaSlicer's
+// "Part.stl_id_2_copy_1" becomes "Part.stl (2)".
+function objectLabel(name) {
+  var s = String(name || "")
+  var m = s.match(/^(.*?)_id_\d+_copy_(\d+)$/i)
+  if (m) s = m[1] + (Number(m[2]) > 0 ? " (" + (Number(m[2]) + 1) + ")" : "")
+  return s.replace(/\.(stl|3mf|obj|step)\b/i, "").replace(/_/g, " ")
+}
+
+function excludeCommand(name) {
+  return excludeNames([{ name: name }]).length === 1 ? "EXCLUDE_OBJECT NAME=" + name : ""
 }
 
 // ---------- Notifications ----------
