@@ -47,6 +47,9 @@
   went unannounced. Only the pause or cancel you clicked is silenced now. A
   notification waiting for its camera picture is no longer lost when the
   printer changes.
+- Fix: a plain AFC unload or eject (no target lane) showed "T0 → T0" and
+  "→ T0" in the bar. The lane picker in Tools now lists that lane's own spool
+  first, not the printer's active spool.
 
 ## 0.2.1 — 2026-10-07
 

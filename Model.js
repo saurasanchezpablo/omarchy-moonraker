@@ -454,6 +454,15 @@ function afcSpoolCommand(lane, id) {
   return n === Math.floor(n) ? "SET_SPOOL_ID LANE=" + name + " SPOOL_ID=" + n : ""
 }
 
+// The list with spool `id` moved to the front (the picker's current choice).
+function pinSpool(list, id) {
+  var out = (list || []).slice()
+  for (var i = 0; i < out.length; i++) {
+    if (out[i].id === id) return [out[i]].concat(out.slice(0, i), out.slice(i + 1))
+  }
+  return out
+}
+
 // Body for POST /server/spoolman/proxy.
 function spoolmanProxy(path) {
   return { request_method: "GET", path: path, use_v2_response: true }

@@ -160,7 +160,10 @@ Panel {
   readonly property bool klippyReady: klippyState === "" || klippyState === "ready"
   readonly property bool changing: online && klippyReady && afc !== null && afc.changing
   readonly property var changeFrom: changing ? Model.afcLane(afc, changeOrigin) : null
-  readonly property var changeTo: changing ? Model.afcLane(afc, afc.target || afc.moving) : null
+  // Only a real target: a plain unload or eject has none, and the lane it
+  // moves is the one leaving (it would read "T0 → T0").
+  readonly property var changeTo: changing
+    ? Model.afcLane(afc, afc.target || (afc.stage === 1 ? afc.moving : "")) : null
 
   readonly property int webcamIndex: Model.pickWebcam(webcams, webcamName)
   readonly property var webcam: webcamIndex >= 0 ? webcams[webcamIndex] : null
@@ -1351,7 +1354,7 @@ Panel {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.title
               }
-              ChangeEnd { lane: root.changeTo; fallback: "?" }
+              ChangeEnd { lane: root.changeTo; fallback: "—" }
             }
 
             // Unload → Load → Resume
@@ -1836,7 +1839,10 @@ Panel {
             height: Math.min(count, 6) * rowHeight
             clip: true
             interactive: count > 6
-            model: root.spools.concat([{ id: -1, name: "No spool", material: "", colors: [], remaining: NaN }])
+            // The current choice first: the lane's own spool, or the active one.
+            model: Model.pinSpool(root.spools, root.spoolPickerLane === ""
+                ? root.spoolId : (Model.afcLane(root.afc, root.spoolPickerLane) || { spoolId: -1 }).spoolId)
+              .concat([{ id: -1, name: "No spool", material: "", colors: [], remaining: NaN }])
 
             delegate: Rectangle {
               required property var modelData
