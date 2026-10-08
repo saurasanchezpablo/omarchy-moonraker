@@ -50,8 +50,12 @@
 - Fix: a plain AFC unload or eject (no target lane) showed "T0 → T0" and
   "→ T0" in the bar. The lane picker in Tools now lists that lane's own spool
   first, not the printer's active spool.
-- The README warns against passing a real API key to the `configure` IPC
-  call (it would land in the process list and shell history). The manifest
+- Security: the `configure` IPC call no longer accepts `apiKey`, whose JSON
+  is a command-line argument readable by every local user; the key is entered
+  in Settings. `dev/screenshots.sh` passed the mock's test key that way and
+  the widget's original settings (with any configured key) to `jq` as
+  arguments; both now reach `jq` through its environment, and the mock refuses
+  `--require-key` together with `--upstream`. The manifest
   declares defaults for `chamberObject` and `temps`, and the architecture
   notes match how commands are launched.
 

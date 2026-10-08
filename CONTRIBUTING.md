@@ -35,9 +35,13 @@ omarchy plugin validate .                    # manifest check
 state without waiting for a real print.
 
 ```bash
-./dev/mock_moonraker.py --scenario printing --require-key demo-key
-omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http://127.0.0.1:7125","apiKey":"demo-key"}'
+./dev/mock_moonraker.py --scenario printing
+omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http://127.0.0.1:7125"}'
 ```
+
+To try the API-key states, start it with `--require-key demo-key` and type
+`demo-key` in the popup's Settings: `configure` refuses `apiKey`, since its
+JSON is a command-line argument any local user can read.
 
 - By default the fake job gets synthesized metadata and `dev/assets/thumbnail.png`.
 - `--upstream`/`--file`: proxy file metadata, thumbnails, and the webcam to a real printer instead.

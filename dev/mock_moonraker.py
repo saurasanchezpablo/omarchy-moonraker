@@ -477,6 +477,10 @@ def main():
         args.upstream = args.upstream.rstrip("/")
     # Taken out of the environment so nothing started later inherits it.
     upstream_key = os.environ.pop("MOONRAKER_API_KEY", "")
+    if args.upstream and args.require_key:
+        # Here the test key protects real printer data: keep it out of argv too.
+        ap.error("with --upstream, pass the test key in MOCK_REQUIRE_KEY, not --require-key "
+                 "(arguments are visible in the process list)")
     args.require_key = os.environ.pop("MOCK_REQUIRE_KEY", "") or args.require_key
     if args.upstream and not args.require_key:
         # Otherwise any local process could use the mock to reach the printer

@@ -1033,9 +1033,12 @@ Panel {
       var patch
       try { patch = JSON.parse(json) } catch (e) { return "invalid JSON" }
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "expected a JSON object"
-      var allowed = ["url", "apiKey", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot", "lightObject"]
+      // No apiKey: this JSON arrives as a command-line argument, readable by
+      // every local user. The key is entered in the popup's Settings.
+      var allowed = ["url", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot", "lightObject"]
       var clean = {}
       for (var k in patch) {
+        if (k === "apiKey") return "apiKey can't be set over IPC (it would be visible in the process list); enter it in Settings"
         if (allowed.indexOf(k) < 0) return "unknown setting: " + k
         clean[k] = patch[k]
       }

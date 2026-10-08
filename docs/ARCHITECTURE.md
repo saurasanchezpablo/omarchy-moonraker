@@ -270,7 +270,11 @@ contains "chamber" (ignoring thermal-protection sensors).
 
 - The API key lives in `shell.json` in plain text, like all widget settings.
 - `status` over IPC never includes the key.
-- `configure` accepts only the known setting keys.
+- `configure` accepts only the known setting keys, and never `apiKey`: its
+  JSON is a command-line argument, visible to every local user.
+- The development scripts never pass a key as an argument either: the mock
+  reads `MOONRAKER_API_KEY` and `MOCK_REQUIRE_KEY` from its environment, and
+  `screenshots.sh` hands settings that may hold a key to `jq` as `env.…`.
 - The key is sent only to the configured URL's origin, and only through curl's
   stdin. Webcam snapshots on another port or host get no key.
 - Webcam URLs come from the printer. They are limited to http/https, and

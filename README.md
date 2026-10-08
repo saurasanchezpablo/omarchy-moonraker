@@ -215,9 +215,9 @@ omarchy-shell io.github.saurasanchezpablo.moonraker-plus status          # JSON 
 omarchy-shell io.github.saurasanchezpablo.moonraker-plus configure '{"url":"http://printer","display":"full"}'
 ```
 
-Don't pass a real `apiKey` to `configure`: the JSON is a command-line
-argument, so the key would show in the process list and your shell history.
-Enter it in the popup's Settings instead.
+`configure` accepts every setting except `apiKey`: its JSON is a
+command-line argument, so a key would show in the process list and your shell
+history. Enter the key in the popup's Settings.
 
 `status` output:
 

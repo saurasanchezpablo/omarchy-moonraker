@@ -47,12 +47,15 @@ read -r BAR_Y BAR_H < <(hyprctl layers -j |
 BAR_REGION="$((MON_W - 700)),$((BAR_Y > 3 ? BAR_Y - 3 : 0)) 700x$((BAR_H + 6))"
 POP_REGION="$((MON_W - 700)),$((BAR_Y + BAR_H + 2)) 700x1000"
 
+# The widget's entry holds its real settings, possibly an API key: it stays in
+# shell variables and reaches jq only through the environment (env.ORIGINAL),
+# never as an argument other users could read in the process list.
 ORIGINAL=$(jq -c --arg id "$ID" '[.bar.layout[][] | select(.id == $id)][0]' "$CFG")
 [[ $ORIGINAL != null ]] || { echo "Enable $ID in the bar first" >&2; exit 1; }
 BACKUP=$(mktemp --suffix .shell.json)
 cp "$CFG" "$BACKUP"
 
-set_entry() {  # set_entry '<JSON object merged into the widget settings>'
+set_entry() {  # set_entry '<JSON object merged into the widget settings>' (never secrets)
   local out
   for _ in $(seq 40); do
     out=$(omarchy-shell "$ID" configure "$1" 2>/dev/null) && [[ $out == ok ]] && return 0
@@ -60,6 +63,20 @@ set_entry() {  # set_entry '<JSON object merged into the widget settings>'
   done
   echo "configure $1 failed: $out" >&2
   return 1
+}
+
+# The widget's configure IPC refuses apiKey (its JSON is a command-line
+# argument). Write the key into shell.json from the environment instead and
+# restart the shell to load it.
+set_api_key() {  # set_api_key <key>; function arguments stay inside this shell
+  local tmp
+  tmp=$(mktemp)
+  API_KEY=$1 jq --arg id "$ID" '(.bar.layout[][] | select(.id == $id) | .apiKey) = env.API_KEY' \
+    "$CFG" >"$tmp" && cat "$tmp" >"$CFG"
+  rm -f "$tmp"
+  omarchy restart shell >/dev/null 2>&1
+  for _ in $(seq 60); do omarchy-shell "$ID" status >/dev/null 2>&1 && break; sleep 0.5; done
+  sleep 2
 }
 
 restore() {
@@ -121,8 +138,8 @@ upstream_key=
 # Leave only this widget in the right section. A layout edit from outside the
 # shell doesn't always bring third-party IPC targets back, so restart it.
 tmp=$(mktemp)
-jq --arg id "$ID" --argjson entry "$ORIGINAL" \
-  '(.bar.layout[] |= map(select(.id != $id))) | .bar.layout.right = [$entry]' "$CFG" >"$tmp"
+ORIGINAL=$ORIGINAL jq --arg id "$ID" \
+  '(.bar.layout[] |= map(select(.id != $id))) | .bar.layout.right = [env.ORIGINAL | fromjson]' "$CFG" >"$tmp"
 cat "$tmp" >"$CFG"
 rm -f "$tmp"
 omarchy restart shell >/dev/null 2>&1
@@ -130,20 +147,22 @@ for _ in $(seq 60); do omarchy-shell "$ID" status >/dev/null 2>&1 && break; slee
 sleep 2
 
 # ---- Setup / login ----
-set_entry '{"url":"","apiKey":"","display":"full","temps":["nozzle","bed","chamber"],"compactWhenIdle":false,"hideWhenIdle":false,"hideWhenOffline":false}'
+set_api_key ""
+set_entry '{"url":"","display":"full","temps":["nozzle","bed","chamber"],"compactWhenIdle":false,"hideWhenIdle":false,"hideWhenOffline":false}'
 sleep 1; capture 01-not-configured
 
 set_entry '{"url":"http://127.0.0.1:7999"}'
 sleep 1; capture 02-unreachable
 
-set_entry "{\"url\":\"$MOCK_URL\",\"apiKey\":\"\"}"
+set_entry "{\"url\":\"$MOCK_URL\"}"
 scenario idle
 sleep 1; capture 03-api-key-missing
 
-set_entry '{"apiKey":"wrong-key"}'
+set_api_key wrong-key
+scenario idle
 sleep 1; capture 04-api-key-wrong
 
-set_entry "{\"apiKey\":\"$MOCK_KEY\"}"
+set_api_key "$MOCK_KEY"
 sleep 1
 
 # ---- Printer lifecycle ----
