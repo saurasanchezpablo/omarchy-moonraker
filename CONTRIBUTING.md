@@ -51,6 +51,9 @@ JSON is a command-line argument any local user can read.
   itself (`MOCK_REQUIRE_KEY`, also kept out of the process list), so other local programs can't use it
   to reach the printer.
 - `--require-key`: reject requests without this key (tests the auth states).
+- `--file-filaments`, `--file-tools`, `--file-grams`: what the fake file needs (OrcaSlicer-style
+  metadata), e.g. `--afc --file-tools 0,2 --file-filaments PETG,TPU,PETG,PLA` to trigger the
+  filament check. The defaults match the `--afc` lanes.
 - `--spoolman`: simulate Moonraker's Spoolman integration with three spools (one multi-color); with `--afc`, lanes accept `SET_SPOOL_ID`.
 - `--afc`: simulate a 4-lane Elegoo Canvas (AFC). The `toolchange-unload`,
   `toolchange-load`, and `toolchange-resume` scenarios show change 3 of 12 from T0 to T2.
@@ -125,6 +128,7 @@ Requirements: `grim`, `jq`, `python-pillow`, and a horizontal bar at the top.
 - [ ] Start a print: *Heating* → *Printing* with the thumbnail, then time left looks sane after ~5%
 - [ ] Pause from the popup → printer pauses, then Resume continues
 - [ ] Cancel: the first click arms, the second click within 3 s cancels
+- [ ] A print whose file needs a material that isn't loaded shows the filament warning and sends one notification
 - [ ] Klipper shutdown: Restart appears; the first click arms, the second restarts Klipper and the popup returns to the normal state
 - [ ] Right click cycles the styles and survives `omarchy restart shell`
 - [ ] Middle click opens the web UI

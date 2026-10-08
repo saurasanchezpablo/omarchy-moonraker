@@ -31,6 +31,7 @@ Panel {
   readonly property bool showFilament: setting("showFilament", true) !== false
   readonly property bool notifyEnabled: setting("notify", true) !== false
   readonly property bool notifySnapshot: setting("notifySnapshot", true) !== false
+  readonly property bool filamentCheck: setting("filamentCheck", true) !== false
   readonly property bool configured: baseUrl !== ""
 
   // Theme colors come from the bar so the widget follows `omarchy theme set`;
@@ -107,6 +108,7 @@ Panel {
   // or IPC ({ kind: "paused" | "cancelled", at }), which shouldn't notify them.
   property var lastSnapshot: null
   property string soonSentFor: ""
+  property string filamentWarnedFor: ""
   property var expectedEvent: ({ kind: "", at: 0 })
   // A notification waiting for its snapshot, sent as text if the wait is cut short.
   property var pendingNotice: null
@@ -150,6 +152,11 @@ Panel {
   // another user could pre-create it and redirect these writes.
   readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR")
     || (Quickshell.env("HOME") + "/.cache")) + "/omarchy-moonraker-plus"
+
+  // What the running file needs against what's loaded (AFC lanes or the
+  // active Spoolman spool). Only once the file's metadata is in.
+  readonly property var filamentWarnings: filamentCheck && printing && fileMeta !== null && metaFor === filename
+    ? Model.filamentWarnings(fileMeta, afc, spool) : []
 
   // Klipper stopped on an error: a firmware restart (no motion) brings it back.
   // Not for "disconnected" (Moonraker can't reach Klipper to restart it).
@@ -425,6 +432,10 @@ Panel {
       excludeFor = ""
       excludeRetryAt = 0
       soonSentFor = ""
+      filamentWarnedFor = ""
+      // The spool check needs Spoolman's current spool, even if the popup
+      // hasn't been opened yet.
+      if (!spoolmanChecked || spoolmanAvailable) loadSpoolman()
     }
     statusMessage = String(ps.message || (status.display_status && status.display_status.message) || "")
     printDuration = Number(ps.print_duration) || 0
@@ -488,6 +499,11 @@ Panel {
       afcError: afc !== null && afc.error, afcMessage: afc ? afc.message : ""
     }
     var events = Model.notifications(lastSnapshot, snap, soonSentFor === filename)
+    // Once per print, as soon as there is something to warn about.
+    if (filamentWarnings.length > 0 && filamentWarnedFor !== filename && lastSnapshot !== null) {
+      filamentWarnedFor = filename
+      events.push({ kind: "filament", title: "Check the filament", body: filamentWarnings.join("\n"), urgency: "critical" })
+    }
     lastSnapshot = snap
     for (var i = 0; i < events.length; i++) {
       var e = events[i]
@@ -1064,7 +1080,7 @@ Panel {
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "expected a JSON object"
       // No apiKey: this JSON arrives as a command-line argument, readable by
       // every local user. The key is entered in the popup's Settings.
-      var allowed = ["url", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot", "lightObject"]
+      var allowed = ["url", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot", "lightObject", "filamentCheck"]
       var clean = {}
       for (var k in patch) {
         if (k === "apiKey") return "apiKey can't be set over IPC (it would be visible in the process list); enter it in Settings"
@@ -1104,6 +1120,7 @@ Panel {
         auth: !root.authFailed, klippy: root.klippyState, file: root.filename, progress: root.progress,
         remaining: root.remaining, temps: root.temps, error: root.lastError,
         light: root.light ? { object: root.light.object, on: root.lightOn } : null,
+        filamentWarnings: root.filamentWarnings,
         spool: !root.spoolmanAvailable ? null : {
           connected: root.spoolmanConnected, id: root.spoolId,
           name: root.spool ? root.spool.name : "", material: root.spool ? root.spool.material : "",
@@ -1324,6 +1341,18 @@ Panel {
             cursorShape: Qt.PointingHandCursor
             onClicked: root.toolsOpen = true
           }
+        }
+
+        // Filament check: what the print needs and isn't loaded.
+        Text {
+          visible: root.filamentWarnings.length > 0
+          width: parent.width
+          textFormat: Text.PlainText
+          text: Model.ICONS.alert + "  " + root.filamentWarnings.join("\n" + "     ")
+          color: root.urgentColor
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          wrapMode: Text.Wrap
         }
 
         // ---------- Progress bar ----------

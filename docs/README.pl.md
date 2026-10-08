@@ -37,6 +37,9 @@ i Canvas, Voron, RatRig, Creality K-series z Klipperem i innymi.
 - **Spoolman** (w Tools, gdy Moonraker ma skonfigurowany Spoolman): aktywna
   szpula z kolorem i pozostałymi gramami oraz lista do zmiany szpuli. Przy AFC
   osobny wiersz dla każdego toru, żeby przypisać lub usunąć jego szpulę.
+- **Kontrola filamentu** w trakcie druku: ostrzega, gdy narzędzie używane przez
+  plik jest puste, ma inny materiał niż w slicerze albo zostało na nim za mało
+  filamentu (na podstawie torów AFC albo szpuli w Spoolmanie).
 - **Sterowanie**: pauza, wznowienie i anulowanie. Anulowanie trzeba kliknąć drugi raz, żeby potwierdzić. Po zatrzymaniu Klippera (shutdown lub błąd) przycisk Restart uruchamia go ponownie (też z potwierdzeniem).
 - **Narzędzia wydruku** (przycisk Tools albo klawisz `t`): pauza na
   wybranej warstwie albo po bieżącej (między wydrukami: dla następnego wydruku), np. żeby włożyć magnesy (wymaga standardowych
@@ -108,6 +111,7 @@ Zapisują się we wpisie widgetu w `~/.config/omarchy/shell.json`:
 | `notify` | powiadomienia na pulpicie (przez `notify-send`), domyślnie włączone |
 | `notifySnapshot` | dołączaj do powiadomień zdjęcie z kamery (domyślnie tak) |
 | `lightObject` | obiekt Klippera z oświetleniem komory, np. `led case`; pusty oznacza automatyczne wykrywanie |
+| `filamentCheck` | ostrzegaj, gdy filament nie pasuje do pliku (domyślnie tak) |
 | `showFilament` | pokazuj tory zmieniacza filamentu i zmiany narzędzia (domyślnie tak); działa tylko z [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) |
 | `webcam` | nazwa kamery z Mainsail/Fluidd; pusta oznacza pierwszą. Przy kilku kamerach kliknięcie obrazu przełącza na następną |
 

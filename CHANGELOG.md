@@ -6,6 +6,12 @@
   "Lost communication with MCU"). A second click within 3 s confirms, and it
   sends Moonraker's firmware restart, which reloads Klipper without moving
   anything. It isn't offered while Moonraker can't reach Klipper at all.
+- New: filament check. During a print the popup warns, and one notification
+  says, when a tool the file uses is empty, holds a different material than
+  the file was sliced for, or (single-tool prints) has less filament left than
+  the print needs. It reads the slicer's materials and grams from the file and
+  compares them with the AFC lanes or the active Spoolman spool. Setting:
+  `filamentCheck`.
 
 ## 0.2.4 — 2026-10-08
 

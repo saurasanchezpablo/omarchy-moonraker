@@ -44,6 +44,9 @@ RatRig, Creality K-series with Klipper, and others.
   tracked on the right spool. On AFC printers, one row per lane to assign or
   clear each lane's spool (AFC's `SET_SPOOL_ID`); spools already on another
   lane are marked
+- **Filament check** during a print: warns when a tool the file uses is
+  empty, holds a different material than it was sliced for, or has less
+  filament left than the print needs (from the AFC lanes or the Spoolman spool)
 - **Controls**: pause, resume, and cancel (cancel asks you to confirm), and
   restart Klipper after a shutdown or error (confirmed with a second click)
 - **Print tools** (the Tools button, or `t`):
@@ -177,7 +180,8 @@ The Settings section in the popup writes these values to the widget's entry in
   "showFilament": true,
   "notify": true,
   "notifySnapshot": true,
-  "lightObject": ""
+  "lightObject": "",
+  "filamentCheck": true
 }
 ```
 
@@ -197,6 +201,7 @@ The Settings section in the popup writes these values to the widget's entry in
 | `notify`          | `true`              | Desktop notifications (through `notify-send`) for finished, paused, failed, and almost-done prints, and Klipper or filament changer errors. |
 | `notifySnapshot`  | `true`              | Attach a webcam picture to notifications (not to "10 minutes left"). |
 | `lightObject`     | auto                | Klipper object for the light button, e.g. `led case`, `neopixel chamber`, or `output_pin caselight`. Auto-detected from LED objects named like a case/chamber light; an `output_pin` is only picked when its name contains "light" or "lamp". |
+| `filamentCheck`   | `true`              | Warn during a print when the filament doesn't match the file: an empty or wrong-material tool, or too little left for a single-tool print. Tools come from the file's `referenced_tools` (or T0), materials and grams from the slicer's metadata. |
 | `showFilament`    | `true`              | Show the filament changer's lanes and tool changes. Only has an effect on printers with [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On). |
 
 The API key is stored in plain text in `shell.json`, like every other Omarchy widget setting.
@@ -234,6 +239,7 @@ history. Enter the key in the popup's Settings.
   },
   "error": "",
   "light": {"object": "led case", "on": true},
+  "filamentWarnings": [],
   "spool": {"connected": true, "id": 12, "name": "Polymaker PLA+ Galaxy Black", "material": "PLA", "remaining": 642.5},
   "pause": {"nextLayer": false, "atLayer": 0},
   "objects": {"all": ["part_id_0_copy_0", "part_id_0_copy_1"], "skipped": [], "current": "part_id_0_copy_0"},

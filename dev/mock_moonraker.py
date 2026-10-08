@@ -168,7 +168,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/server/files/metadata":
             self.send_json({
                 "filename": args.file, "estimated_time": TOTAL, "layer_count": 240,
-                "filament_total": 13890.0,
+                "filament_total": 13890.0, "slicer": "OrcaSlicer",
+                # OrcaSlicer's style: a JSON-like list naming every project filament.
+                "filament_type": json.dumps(args.file_filaments.split(",")),
+                "filament_weight_total": args.file_grams,
+                "referenced_tools": [int(t) for t in args.file_tools.split(",") if t != ""],
                 "thumbnails": [{"width": 300, "height": 300, "size": 0,
                                 "relative_path": ".thumbs/mock-300x300.png"}],
             })
@@ -470,6 +474,11 @@ def main():
     ap.add_argument("--no-webcam", action="store_true", help="report no webcams")
     ap.add_argument("--afc", action="store_true", help="simulate an AFC filament changer (4-lane Canvas)")
     ap.add_argument("--spoolman", action="store_true", help="simulate Moonraker's Spoolman integration")
+    ap.add_argument("--file-filaments", default="PETG,TPU,PLA,PLA",
+                    help="materials the fake file names per tool (defaults match the --afc lanes)")
+    ap.add_argument("--file-tools", default="",
+                    help="tools the fake file uses, e.g. 0,2 (empty: a single-tool file)")
+    ap.add_argument("--file-grams", type=float, default=12.4, help="filament the fake file needs, in grams")
     args = ap.parse_args()
     if args.api_key is not None:
         ap.error("--api-key is no longer accepted: it would show the key in the process list. "

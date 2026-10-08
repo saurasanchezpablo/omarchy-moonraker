@@ -34,7 +34,8 @@
       "showFilament": true,
       "notify": true,
       "notifySnapshot": true,
-      "lightObject": ""
+      "lightObject": "",
+      "filamentCheck": true
     },
     "schema": [
       {
@@ -148,6 +149,13 @@
         "label": "Chamber light object",
         "description": "Klipper object for the light button on the camera, e.g. 'led case' or 'output_pin caselight'. Auto-detected when empty.",
         "defaultValue": ""
+      },
+      {
+        "key": "filamentCheck",
+        "type": "boolean",
+        "label": "Filament check",
+        "description": "During a print, warn when a tool the file uses is empty, holds a different material, or (single-tool prints) has less filament left than the print needs. Uses the AFC lanes or the active Spoolman spool.",
+        "defaultValue": true
       }
     ]
   }

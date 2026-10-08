@@ -198,6 +198,21 @@ material, color, and weight from Spoolman. AFC refuses a spool held by another
 lane, so the picker marks those and doesn't offer them. Lane names and ids are
 checked before they go into G-code.
 
+### Filament check
+
+When a print's metadata arrives, `Model.filamentWarnings()` compares it with
+what is loaded. The tools come from `referenced_tools`, or T0 when the slicer
+lists none (OrcaSlicer names every project filament even for a one-color
+print). Materials come from `filament_type`, parsed as OrcaSlicer's JSON-like
+list, PrusaSlicer's `;` list, or an array, capped at 16 entries of 40
+characters; "PLA+" matches "PLA". With AFC each used tool is matched to its
+lane (missing, empty, other material); without it, the active Spoolman spool
+is used. Grams (`filament_weight_total`) are only compared for single-tool
+prints, since the file doesn't split them per tool. Starting a print loads
+Spoolman's state if the popup never did. Warnings show under the title and go
+out once per print through the normal notification path (escaped, after
+`--`). Nothing is sent to the printer.
+
 ### Notifications
 
 After every status update, `Model.notifications(previous, current)` compares

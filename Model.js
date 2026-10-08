@@ -14,6 +14,7 @@ var MAX_WEBCAMS = 8
 var MAX_SPOOLS = 200
 var MAX_EXCLUDE_OBJECTS = 256
 var MAX_PRINTER_OBJECTS = 4000
+var MAX_TOOLS = 16
 var MAX_IMAGE_BYTES = 2097152     // slicer thumbnails are tens of KB
 var MAX_SNAPSHOT_BYTES = 4194304  // a 1080p webcam JPEG is a few hundred KB
 var REQUEST_TIMEOUT_S = 10
@@ -466,6 +467,82 @@ function pinSpool(list, id) {
 // Body for POST /server/spoolman/proxy.
 function spoolmanProxy(path) {
   return { request_method: "GET", path: path, use_v2_response: true }
+}
+
+// ---------- Filament check ----------
+// What the sliced file needs against what is loaded. All inputs come from the
+// file and the printer: lists are capped and strings cut short, and the result
+// is only ever shown as plain text.
+
+// A slicer list field. OrcaSlicer writes a JSON-style list ("[\"PETG\", \"TPU\"]"),
+// PrusaSlicer "PETG;TPU", and Moonraker may already hand over an array.
+function slicerList(value) {
+  var list = toArray(value)
+  if (!list) {
+    var s = String(value === null || value === undefined ? "" : value).trim()
+    if (s === "") return []
+    if (s.charAt(0) === "[") {
+      try { list = toArray(JSON.parse(s)) } catch (e) { list = null }
+    }
+    if (!list) list = s.split(/[;,]/)
+  }
+  return list.slice(0, MAX_TOOLS).map(function(x) {
+    return String(x === null || x === undefined ? "" : x).replace(/[\x00-\x1f\x7f]/g, "").trim().slice(0, 40)
+  })
+}
+
+// Tool numbers the file uses: referenced_tools when the slicer lists them,
+// otherwise just T0 (single-tool files often name every project filament).
+function usedTools(meta) {
+  var ref = toArray(meta && meta.referenced_tools) || []
+  var out = []
+  for (var i = 0; i < ref.length && out.length < MAX_TOOLS; i++) {
+    var n = Number(ref[i])
+    if (n === Math.floor(n) && n >= 0 && n < MAX_TOOLS && out.indexOf(n) < 0) out.push(n)
+  }
+  return out.length > 0 ? out : [0]
+}
+
+// "PLA+" and "pla" match "PLA"; "PETG-HF" stays different from "PETG".
+function materialKey(m) {
+  return String(m || "").toUpperCase().replace(/\+$/, "").replace(/[^A-Z0-9]/g, "")
+}
+
+function sameMaterial(a, b) {
+  var ka = materialKey(a), kb = materialKey(b)
+  return ka === "" || kb === "" || ka === kb
+}
+
+// Short warning lines, at most four.
+//   meta: the file's metadata; afc: afcState() or null; spool: the active
+//   Spoolman spool (spoolInfo) or null.
+function filamentWarnings(meta, afc, spool) {
+  if (!meta) return []
+  var types = slicerList(meta.filament_type)
+  var tools = usedTools(meta)
+  var grams = Number(meta.filament_weight_total)
+  var needGrams = isFinite(grams) && grams > 0
+  var out = []
+  if (afc && afc.lanes.length > 0) {
+    for (var i = 0; i < tools.length; i++) {
+      var label = "T" + tools[i]
+      var lane = null
+      for (var j = 0; j < afc.lanes.length; j++) if (afc.lanes[j].tool === label) lane = afc.lanes[j]
+      if (!lane) { out.push(label + " isn't mapped to a lane"); continue }
+      if (!lane.ready) { out.push(label + " is empty"); continue }
+      var need = types[tools[i]] || ""
+      if (!sameMaterial(need, lane.material)) out.push(label + " needs " + need + ", loaded " + lane.material)
+      // Per-tool grams aren't in the file: only a single-tool print can be checked.
+      if (tools.length === 1 && needGrams && lane.weight > 0 && lane.weight < grams)
+        out.push(label + " has " + formatWeight(lane.weight) + " left, the print needs " + formatWeight(grams))
+    }
+  } else if (spool) {
+    var needed = types[tools[0]] || ""
+    if (!sameMaterial(needed, spool.material)) out.push("Needs " + needed + ", the spool is " + spool.material)
+    if (tools.length === 1 && needGrams && spool.remaining > 0 && spool.remaining < grams)
+      out.push("The spool has " + formatWeight(spool.remaining) + " left, the print needs " + formatWeight(grams))
+  }
+  return out.slice(0, 4)
 }
 
 // ---------- Notifications ----------
