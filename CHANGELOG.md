@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 — unreleased
+## 0.3.0 — 2026-10-08
 
 - New: a Restart button when Klipper stops on an error or shutdown (e.g.
   "Lost communication with MCU"). A second click within 3 s confirms, and it
