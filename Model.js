@@ -553,8 +553,9 @@ var SOON_SECONDS = 600   // "10 minutes left"
 // ({ state, klippy, file, message, klippyMessage, remaining, duration,
 // afcError, afcMessage }). `prev` is null right after start-up or a printer
 // change, which never notifies. `soonSent` is true once this job had its
-// "minutes left" notice. Returns [{ kind, title, body, urgency }].
-function notifications(prev, next, soonSent) {
+// "minutes left" notice, `firstLayerSent` its first-layer notice (snapshots
+// also carry `layer`). Returns [{ kind, title, body, urgency }].
+function notifications(prev, next, soonSent, firstLayerSent) {
   if (!prev || !next) return []
   var out = []
   var name = displayFileName(next.file || prev.file)
@@ -575,6 +576,12 @@ function notifications(prev, next, soonSent) {
 
   if (next.afcError && !prev.afcError)
     out.push({ kind: "afc", title: "Filament changer error", body: next.afcMessage || name, urgency: "critical" })
+
+  // Layer 1 just finished. Only on the step from layer 0/1 to 2-3, so starting
+  // the widget mid-print (or a slicer counting oddly) never fires it.
+  var pl = Number(prev.layer) || 0, nl = Number(next.layer) || 0
+  if (!firstLayerSent && next.state === "printing" && pl <= 1 && nl >= 2 && nl <= 3)
+    out.push({ kind: "firstlayer", title: "First layer done", body: name, urgency: "normal" })
 
   if (!soonSent && next.state === "printing" && next.remaining >= 0 && next.remaining <= SOON_SECONDS
       && prev.remaining > SOON_SECONDS)

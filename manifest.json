@@ -35,7 +35,8 @@
       "notify": true,
       "notifySnapshot": true,
       "lightObject": "",
-      "filamentCheck": true
+      "filamentCheck": true,
+      "notifyFirstLayer": true
     },
     "schema": [
       {
@@ -155,6 +156,13 @@
         "type": "boolean",
         "label": "Filament check",
         "description": "During a print, warn when a tool the file uses is empty, holds a different material, or (single-tool prints) has less filament left than the print needs. Uses the AFC lanes or the active Spoolman spool.",
+        "defaultValue": true
+      },
+      {
+        "key": "notifyFirstLayer",
+        "type": "boolean",
+        "label": "First layer notification",
+        "description": "Notify, with a camera snapshot when available, once the first layer is done, to check adhesion. Needs a slicer that reports layers.",
         "defaultValue": true
       }
     ]

@@ -218,8 +218,9 @@ out once per print through the normal notification path (escaped, after
 After every status update, `Model.notifications(previous, current)` compares
 two snapshots and returns the events to announce: a print finishing, being
 cancelled, failing, or pausing; Klipper leaving `ready` (but not a restart into
-`startup`); an AFC error; and the remaining time crossing 10 minutes (once per
-job). The first status after start-up or a printer change never notifies.
+`startup`); an AFC error; the remaining time crossing 10 minutes; and the first
+layer finishing, i.e. the reported layer stepping from 0/1 to 2-3 (each once
+per job, so a widget started mid-print never sends it). The first status after start-up or a printer change never notifies.
 Pause and cancel clicked in the popup within the last 15 s stay quiet.
 
 With `notifySnapshot`, every notification except "minutes left" first grabs

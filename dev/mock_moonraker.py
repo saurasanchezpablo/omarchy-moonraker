@@ -40,6 +40,8 @@ TOTAL = 3 * 3600
 SCENARIOS = {
     "idle":             ("standby",   0.00, "ready",    (0, 0, 0),     ""),
     "heating":          ("printing",  0.00, "ready",    (220, 90, 45), ""),
+    "printing-first-layer": ("printing", 0.005, "ready", (220, 90, 45), ""),   # layer 1
+    "printing-second-layer": ("printing", 0.009, "ready", (220, 90, 45), ""),  # layer 2
     "printing-start":   ("printing",  0.03, "ready",    (220, 90, 45), ""),
     "printing":         ("printing",  0.42, "ready",    (220, 90, 45), ""),
     "printing-end":     ("printing",  0.97, "ready",    (220, 90, 45), ""),

@@ -32,6 +32,7 @@ Panel {
   readonly property bool notifyEnabled: setting("notify", true) !== false
   readonly property bool notifySnapshot: setting("notifySnapshot", true) !== false
   readonly property bool filamentCheck: setting("filamentCheck", true) !== false
+  readonly property bool notifyFirstLayer: setting("notifyFirstLayer", true) !== false
   readonly property bool configured: baseUrl !== ""
 
   // Theme colors come from the bar so the widget follows `omarchy theme set`;
@@ -109,6 +110,7 @@ Panel {
   property var lastSnapshot: null
   property string soonSentFor: ""
   property string filamentWarnedFor: ""
+  property string firstLayerSentFor: ""
   property var expectedEvent: ({ kind: "", at: 0 })
   // A notification waiting for its snapshot, sent as text if the wait is cut short.
   property var pendingNotice: null
@@ -433,6 +435,7 @@ Panel {
       excludeRetryAt = 0
       soonSentFor = ""
       filamentWarnedFor = ""
+      firstLayerSentFor = ""
       // The spool check needs Spoolman's current spool, even if the popup
       // hasn't been opened yet.
       if (!spoolmanChecked || spoolmanAvailable) loadSpoolman()
@@ -496,9 +499,11 @@ Panel {
       remaining: Model.isActiveState(printState)
         ? Model.remainingSeconds(printDuration, progress, fileMeta ? fileMeta.estimated_time : 0) : -1,
       duration: printDuration,
+      layer: currentLayer,
       afcError: afc !== null && afc.error, afcMessage: afc ? afc.message : ""
     }
-    var events = Model.notifications(lastSnapshot, snap, soonSentFor === filename)
+    var events = Model.notifications(lastSnapshot, snap, soonSentFor === filename,
+                                     !notifyFirstLayer || firstLayerSentFor === filename)
     // Once per print, as soon as there is something to warn about.
     if (filamentWarnings.length > 0 && filamentWarnedFor !== filename && lastSnapshot !== null) {
       filamentWarnedFor = filename
@@ -508,6 +513,7 @@ Panel {
     for (var i = 0; i < events.length; i++) {
       var e = events[i]
       if (e.kind === "soon") soonSentFor = filename
+      if (e.kind === "firstlayer") firstLayerSentFor = filename
       if (e.kind === expectedEvent.kind && Date.now() - expectedEvent.at < 15000) {
         expectedEvent = { kind: "", at: 0 }
         continue
@@ -741,6 +747,8 @@ Panel {
     excludeChecked = false
     excludeRetryAt = 0
     soonSentFor = ""
+    filamentWarnedFor = ""
+    firstLayerSentFor = ""
     currentObject = ""
     spoolmanChecked = false
     spoolmanAvailable = false
@@ -1080,7 +1088,7 @@ Panel {
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "expected a JSON object"
       // No apiKey: this JSON arrives as a command-line argument, readable by
       // every local user. The key is entered in the popup's Settings.
-      var allowed = ["url", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot", "lightObject", "filamentCheck"]
+      var allowed = ["url", "display", "temps", "pollInterval", "compactWhenIdle", "hideWhenIdle", "hideWhenOffline", "chamberObject", "showCamera", "webcam", "showFilament", "notify", "notifySnapshot", "lightObject", "filamentCheck", "notifyFirstLayer"]
       var clean = {}
       for (var k in patch) {
         if (k === "apiKey") return "apiKey can't be set over IPC (it would be visible in the process list); enter it in Settings"

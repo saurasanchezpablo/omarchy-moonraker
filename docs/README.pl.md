@@ -32,7 +32,8 @@ i Canvas, Voron, RatRig, Creality K-series z Klipperem i innymi.
   wyładowanie / ładowanie / wznowienie i „zmiana 3 z 12” przy wydrukach
   wielokolorowych. W trakcie zmiany chip w barze pokazuje docelowe narzędzie.
 - **Powiadomienia** na pulpicie: koniec wydruku, pauza (np. koniec filamentu),
-  błąd, „zostało 10 minut” oraz błędy Klippera i zmieniacza filamentu, ze
+  błąd, „zostało 10 minut”, koniec pierwszej warstwy oraz błędy Klippera
+  i zmieniacza filamentu, ze
   zdjęciem z kamery, żeby od razu widzieć gotowy model albo problem.
 - **Spoolman** (w Tools, gdy Moonraker ma skonfigurowany Spoolman): aktywna
   szpula z kolorem i pozostałymi gramami oraz lista do zmiany szpuli. Przy AFC
@@ -111,6 +112,7 @@ Zapisują się we wpisie widgetu w `~/.config/omarchy/shell.json`:
 | `notify` | powiadomienia na pulpicie (przez `notify-send`), domyślnie włączone |
 | `notifySnapshot` | dołączaj do powiadomień zdjęcie z kamery (domyślnie tak) |
 | `lightObject` | obiekt Klippera z oświetleniem komory, np. `led case`; pusty oznacza automatyczne wykrywanie |
+| `notifyFirstLayer` | powiadomienie po pierwszej warstwie, ze zdjęciem (domyślnie tak) |
 | `filamentCheck` | ostrzegaj, gdy filament nie pasuje do pliku (domyślnie tak) |
 | `showFilament` | pokazuj tory zmieniacza filamentu i zmiany narzędzia (domyślnie tak); działa tylko z [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) |
 | `webcam` | nazwa kamery z Mainsail/Fluidd; pusta oznacza pierwszą. Przy kilku kamerach kliknięcie obrazu przełącza na następną |

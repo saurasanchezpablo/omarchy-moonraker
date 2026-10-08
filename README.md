@@ -60,8 +60,9 @@ RatRig, Creality K-series with Klipper, and others.
   <img src="docs/screenshots/16-tools.png" width="330" alt="Print tools: pause at layer, spool, and skip object">
 - **Desktop notifications** when a print finishes, pauses (e.g. filament
   runout), fails, or has 10 minutes left, and when Klipper or the filament
-  changer stops with an error, with a camera snapshot attached so you can see
-  the finished part or the problem. Your own pause/cancel from the popup stays quiet
+  changer stops with an error, and a "first layer done" check, with a camera
+  snapshot attached so you can see the first layer, the finished part, or the
+  problem. Your own pause/cancel from the popup stays quiet
 - **Every printer state is covered**: setup, unreachable, bad API key, Klipper
   starting/shutdown/disconnected, idle, heating, printing, paused, complete,
   cancelled, and error. See [docs/STATES.md](docs/STATES.md).
@@ -181,7 +182,8 @@ The Settings section in the popup writes these values to the widget's entry in
   "notify": true,
   "notifySnapshot": true,
   "lightObject": "",
-  "filamentCheck": true
+  "filamentCheck": true,
+  "notifyFirstLayer": true
 }
 ```
 
@@ -201,6 +203,7 @@ The Settings section in the popup writes these values to the widget's entry in
 | `notify`          | `true`              | Desktop notifications (through `notify-send`) for finished, paused, failed, and almost-done prints, and Klipper or filament changer errors. |
 | `notifySnapshot`  | `true`              | Attach a webcam picture to notifications (not to "10 minutes left"). |
 | `lightObject`     | auto                | Klipper object for the light button, e.g. `led case`, `neopixel chamber`, or `output_pin caselight`. Auto-detected from LED objects named like a case/chamber light; an `output_pin` is only picked when its name contains "light" or "lamp". |
+| `notifyFirstLayer` | `true`            | "First layer done" notification (with a snapshot) when layer 2 starts, to check adhesion. Needs a slicer that reports layers. |
 | `filamentCheck`   | `true`              | Warn during a print when the filament doesn't match the file: an empty or wrong-material tool, or too little left for a single-tool print. Tools come from the file's `referenced_tools` (or T0), materials and grams from the slicer's metadata. |
 | `showFilament`    | `true`              | Show the filament changer's lanes and tool changes. Only has an effect on printers with [AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On). |
 

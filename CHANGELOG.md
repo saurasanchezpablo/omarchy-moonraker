@@ -12,6 +12,9 @@
   the print needs. It reads the slicer's materials and grams from the file and
   compares them with the AFC lanes or the active Spoolman spool. Setting:
   `filamentCheck`.
+- New: "First layer done" notification with a camera snapshot, to check
+  adhesion without walking to the printer. Sent once per print when layer 2
+  starts (needs a slicer that reports layers). Setting: `notifyFirstLayer`.
 
 ## 0.2.4 — 2026-10-08
 

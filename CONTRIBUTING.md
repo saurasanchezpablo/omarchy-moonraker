@@ -67,7 +67,7 @@ curl -X POST http://127.0.0.1:7125/mock/scenario/paused
 curl http://127.0.0.1:7125/mock/scenarios
 ```
 
-Scenarios: `idle`, `heating`, `printing-start`, `printing`, `printing-end`,
+Scenarios: `idle`, `heating`, `printing-first-layer`, `printing-second-layer`, `printing-start`, `printing`, `printing-end`,
 `paused`, `complete`, `cancelled`, `error`, `klippy-startup`,
 `klippy-shutdown`, `klippy-disconnected`, and with `--afc`:
 `toolchange-unload`, `toolchange-load`, `toolchange-resume`.
@@ -128,6 +128,7 @@ Requirements: `grim`, `jq`, `python-pillow`, and a horizontal bar at the top.
 - [ ] Start a print: *Heating* → *Printing* with the thumbnail, then time left looks sane after ~5%
 - [ ] Pause from the popup → printer pauses, then Resume continues
 - [ ] Cancel: the first click arms, the second click within 3 s cancels
+- [ ] A new print sends "First layer done" with a snapshot when layer 2 starts, once
 - [ ] A print whose file needs a material that isn't loaded shows the filament warning and sends one notification
 - [ ] Klipper shutdown: Restart appears; the first click arms, the second restarts Klipper and the popup returns to the normal state
 - [ ] Right click cycles the styles and survives `omarchy restart shell`
