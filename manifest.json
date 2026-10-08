@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.saurasanchezpablo.moonraker-plus",
   "name": "Moonraker Printer Plus",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "author": "saurasanchezpablo (based on Moonraker Printer by prodpixa)",
   "license": "MIT",
   "description": "Klipper/Moonraker 3D printer in the bar: progress, time left, temperatures, live camera, AFC filament lanes and tool changes, notifications, print tools, and Spoolman. Extends prodpixa's Moonraker Printer.",

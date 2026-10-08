@@ -52,6 +52,8 @@ RatRig, Creality K-series with Klipper, and others.
     pending pause is shown under the title so it can't surprise you
   - skip one object of a multi-part plate when it fails, and keep printing the
     rest (needs `[exclude_object]` and a slicer that labels objects)
+
+  <img src="docs/screenshots/16-tools.png" width="330" alt="Print tools: pause at layer, spool, and skip object">
 - **Desktop notifications** when a print finishes, pauses (e.g. filament
   runout), fails, or has 10 minutes left, and when Klipper or the filament
   changer stops with an error, with a camera snapshot attached so you can see

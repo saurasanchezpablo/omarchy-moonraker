@@ -2,8 +2,8 @@
 
 Every state the widget can show, captured against the mock Moonraker
 (`dev/mock_moonraker.py`) with `dev/screenshots.sh`. Colors come from the
-active Omarchy theme, so they will differ on your system. The urgent color in
-these shots happens to be green.
+active Omarchy theme, so they will differ on your system. In these shots the
+accent is gold and the urgent color red.
 
 Each state shows the bar chip first, then the popup. The screenshots use a
 neutral `calibration-cube.gcode` job and the bundled mock thumbnail.
@@ -16,6 +16,14 @@ camera with the chamber light switch, and the lanes with the loading one
 pulsing.
 
 <img src="screenshots/15-camera-filament-change.png" width="400">
+
+## Print tools
+
+The Tools section during a print: a pause planned at layer 150 (also shown as
+"Pauses at" in the job details), the active Spoolman spool, and the plate's
+objects with the one printing now marked, each with a Skip button.
+
+<img src="screenshots/16-tools.png" width="400">
 
 ## 1. Setup and connection
 

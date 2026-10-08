@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4 — 2026-10-08
+
+- Fix: the pause-at-layer field could show one layer (e.g. 101) while the
+  button offered to clear another (150), and clicking would send the number
+  in the field. The field now follows the chosen layer, and typed text is
+  only used while the field is being edited.
+- Screenshots and the marketplace preview were retaken in the current look,
+  including a new Tools shot. `dev/screenshots.sh` works with a bar at the
+  bottom of the screen and captures tall popups in full.
+
 ## 0.2.3 — 2026-10-08
 
 - Security: the `configure` IPC call no longer accepts `apiKey`, whose JSON
