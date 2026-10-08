@@ -913,12 +913,18 @@ Panel {
     if (spoolmanConnected) loadSpools()
   }
 
-  // What the layer field shows right now, typed but not yet committed
-  // included: the kit's Button doesn't take focus, so a click wouldn't
-  // commit the SpinBox's text first.
+  // The SpinBox clamps and edits its own value, which breaks a declarative
+  // binding to layerChoice, so push every change to it explicitly.
+  onLayerChoiceChanged: if (layerField.field.value !== layerChoice) layerField.field.value = layerChoice
+
+  // The layer to send. While the user is typing, the text isn't committed to
+  // the SpinBox yet (the kit's Button doesn't take focus), so read it.
   function chosenLayer() {
-    var typed = parseInt(String(layerField.field.contentItem.text || ""), 10)
-    var n = isNaN(typed) ? layerField.field.value : typed
+    var n = layerField.field.value
+    if (layerField.field.activeFocus) {
+      var typed = parseInt(String(layerField.field.contentItem.text || ""), 10)
+      if (!isNaN(typed)) n = typed
+    }
     return Math.max(layerField.from, Math.min(layerField.to, n))
   }
   onBaseUrlChanged: reset()
