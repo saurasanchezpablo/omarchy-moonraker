@@ -13,7 +13,8 @@
 # proxies real file metadata and thumbnails instead. While capturing, the bar's
 # right section holds only this widget so no other widgets end up in the shots;
 # shell.json is restored from a backup on exit. Needs a horizontal bar at the
-# top of the first monitor, grim, jq, and python-pillow.
+# top or bottom of the first monitor, grim, jq, and python-pillow. The popup is
+# translucent: capture over an empty workspace or a plain window.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -40,12 +41,19 @@ mkdir -p "$OUT"
 # are made by hand.
 rm -f "$OUT"/0*.png "$OUT"/1[0-4]-*.png
 
-read -r MON_W < <(hyprctl monitors -j | jq -r '.[0].width')
-# Bar geometry from its layer surface, so nothing below the bar gets captured.
+read -r MON_W MON_H < <(hyprctl monitors -j | jq -r '.[0] | "\(.width) \(.height)"')
+# Bar geometry from its layer surface, so nothing beyond the bar gets captured.
 read -r BAR_Y BAR_H < <(hyprctl layers -j |
   jq -r '[.. | objects | select(.namespace? == "omarchy-bar")][0] | "\(.y) \(.h)"')
 BAR_REGION="$((MON_W - 700)),$((BAR_Y > 3 ? BAR_Y - 3 : 0)) 700x$((BAR_H + 6))"
-POP_REGION="$((MON_W - 700)),$((BAR_Y + BAR_H + 2)) 700x1000"
+# The popup opens below a top bar and above a bottom one. With the camera and
+# the settings open it can be tall: take as much as the screen allows, up to 1300.
+POP_H=$(( MON_H - BAR_H - 8 < 1300 ? MON_H - BAR_H - 8 : 1300 ))
+if (( BAR_Y > MON_H / 2 )); then
+  POP_REGION="$((MON_W - 700)),$((BAR_Y - POP_H - 2)) 700x$POP_H"
+else
+  POP_REGION="$((MON_W - 700)),$((BAR_Y + BAR_H + 2)) 700x$POP_H"
+fi
 
 # The widget's entry holds its real settings, possibly an API key: it stays in
 # shell variables and reaches jq only through the environment (env.ORIGINAL),
