@@ -413,6 +413,12 @@ class Handler(BaseHTTPRequestHandler):
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             self.send_json(self.gcode(query.get("script", [""])[0]))
             return
+        if path == "/printer/firmware_restart":
+            # Klipper comes back ready, as after a successful FIRMWARE_RESTART.
+            if scenario["name"] in ("klippy-shutdown", "error"):
+                scenario["name"] = "idle"
+            self.send_json("ok")
+            return
         if path in transitions:
             want, nxt = transitions[path]
             current = SCENARIOS[scenario["name"]][0]

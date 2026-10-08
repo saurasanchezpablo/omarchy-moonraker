@@ -70,6 +70,7 @@ until it crashes. curl closes the connection when a limit is hit.
 | A new print starts (with `[exclude_object]`) | `GET /printer/objects/query?exclude_object=objects`: object names, once per file |
 | Popup open, with `[spoolman]` | `GET /server/spoolman/status`, then the active spool via `POST /server/spoolman/proxy` (`GET /v1/spool/<id>`) |
 | Spool picker | `POST /server/spoolman/proxy` (`GET /v1/spool?allow_archived=false`), `POST /server/spoolman/spool_id` |
+| Restart (Klipper in `shutdown` or `error`, confirmed) | `POST /printer/firmware_restart` |
 | Light button | `POST /printer/gcode/script?script=SET_LED …` or `SET_PIN …` |
 | While the popup is open | `GET <snapshot_url>`, one frame at a time, saved to `$XDG_RUNTIME_DIR/omarchy-moonraker-plus/camera-{0,1}` |
 

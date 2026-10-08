@@ -129,6 +129,7 @@ Panel {
   // so a new layer starting doesn't overwrite what they picked.
   property int layerChoice: 1
   property bool cancelArmed: false
+  property bool restartArmed: false
   property bool actionBusy: false
   property int generation: 0
   property var inflight: null
@@ -150,6 +151,9 @@ Panel {
   readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR")
     || (Quickshell.env("HOME") + "/.cache")) + "/omarchy-moonraker-plus"
 
+  // Klipper stopped on an error: a firmware restart (no motion) brings it back.
+  // Not for "disconnected" (Moonraker can't reach Klipper to restart it).
+  readonly property bool canRestart: online && (klippyState === "shutdown" || klippyState === "error")
   // Klipper down means no print can be controlled, whatever print_stats said last.
   readonly property bool printing: online && klippyReady && Model.isActiveState(printState)
   readonly property real remaining: printing
@@ -888,6 +892,24 @@ Panel {
     })
   }
 
+  // First click arms, a second within 3 s restarts. A fixed endpoint, nothing
+  // from the printer or the user goes into the request.
+  function requestRestart() {
+    if (!canRestart || actionBusy) return
+    if (!restartArmed) {
+      restartArmed = true
+      cancelDisarm.restart()
+      return
+    }
+    restartArmed = false
+    actionBusy = true
+    request("POST", "/printer/firmware_restart", function(err) {
+      root.actionBusy = false
+      if (err) root.lastError = err.message
+      root.poll()
+    })
+  }
+
   function requestCancel() {
     if (!cancelArmed) {
       cancelArmed = true
@@ -946,6 +968,7 @@ Panel {
     if (opened) {
       settingsOpen = !configured || authFailed
       cancelArmed = false
+      restartArmed = false
       skipArmed = ""
       urlField.text = setting("url", "")
       keyField.text = setting("apiKey", "")
@@ -1131,7 +1154,10 @@ Panel {
   Timer {
     id: cancelDisarm
     interval: 3000
-    onTriggered: root.cancelArmed = false
+    onTriggered: {
+      root.cancelArmed = false
+      root.restartArmed = false
+    }
   }
 
   visible: !hiddenByRule
@@ -1692,7 +1718,7 @@ Panel {
           width: parent.width
           spacing: Style.space(6)
 
-          readonly property int count: (root.printing ? 2 : 0) + (root.hasTools ? 1 : 0) + 2
+          readonly property int count: (root.printing ? 2 : 0) + (root.canRestart ? 1 : 0) + (root.hasTools ? 1 : 0) + 2
           readonly property real cellWidth: (width - spacing * (count - 1)) / count
 
           ActionButton {
@@ -1710,6 +1736,15 @@ Panel {
             active: root.cancelArmed
             enabled: !root.actionBusy
             onClicked: root.requestCancel()
+          }
+
+          ActionButton {
+            visible: root.canRestart
+            iconText: Model.ICONS.refresh
+            text: root.restartArmed ? "Confirm" : "Restart"
+            active: root.restartArmed
+            enabled: !root.actionBusy
+            onClicked: root.requestRestart()
           }
 
           ActionButton {

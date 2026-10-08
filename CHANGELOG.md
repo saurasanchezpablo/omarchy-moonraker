@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 — unreleased
+
+- New: a Restart button when Klipper stops on an error or shutdown (e.g.
+  "Lost communication with MCU"). A second click within 3 s confirms, and it
+  sends Moonraker's firmware restart, which reloads Klipper without moving
+  anything. It isn't offered while Moonraker can't reach Klipper at all.
+
 ## 0.2.4 — 2026-10-08
 
 - Fix: the pause-at-layer field could show one layer (e.g. 101) while the

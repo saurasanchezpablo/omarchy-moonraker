@@ -125,6 +125,7 @@ Requirements: `grim`, `jq`, `python-pillow`, and a horizontal bar at the top.
 - [ ] Start a print: *Heating* → *Printing* with the thumbnail, then time left looks sane after ~5%
 - [ ] Pause from the popup → printer pauses, then Resume continues
 - [ ] Cancel: the first click arms, the second click within 3 s cancels
+- [ ] Klipper shutdown: Restart appears; the first click arms, the second restarts Klipper and the popup returns to the normal state
 - [ ] Right click cycles the styles and survives `omarchy restart shell`
 - [ ] Middle click opens the web UI
 - [ ] Tools → pause at a layer two layers ahead: the print pauses there, and "Pauses at" disappears afterwards

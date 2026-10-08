@@ -44,7 +44,8 @@ RatRig, Creality K-series with Klipper, and others.
   tracked on the right spool. On AFC printers, one row per lane to assign or
   clear each lane's spool (AFC's `SET_SPOOL_ID`); spools already on another
   lane are marked
-- **Controls**: pause, resume, and cancel (cancel asks you to confirm)
+- **Controls**: pause, resume, and cancel (cancel asks you to confirm), and
+  restart Klipper after a shutdown or error (confirmed with a second click)
 - **Print tools** (the Tools button, or `t`):
   - pause at a chosen layer or after the current one, e.g. to drop in magnets
     or nuts (needs the standard Mainsail/Fluidd pause macros and a slicer that

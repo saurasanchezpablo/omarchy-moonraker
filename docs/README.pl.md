@@ -37,7 +37,7 @@ i Canvas, Voron, RatRig, Creality K-series z Klipperem i innymi.
 - **Spoolman** (w Tools, gdy Moonraker ma skonfigurowany Spoolman): aktywna
   szpula z kolorem i pozostałymi gramami oraz lista do zmiany szpuli. Przy AFC
   osobny wiersz dla każdego toru, żeby przypisać lub usunąć jego szpulę.
-- **Sterowanie**: pauza, wznowienie i anulowanie. Anulowanie trzeba kliknąć drugi raz, żeby potwierdzić.
+- **Sterowanie**: pauza, wznowienie i anulowanie. Anulowanie trzeba kliknąć drugi raz, żeby potwierdzić. Po zatrzymaniu Klippera (shutdown lub błąd) przycisk Restart uruchamia go ponownie (też z potwierdzeniem).
 - **Narzędzia wydruku** (przycisk Tools albo klawisz `t`): pauza na
   wybranej warstwie albo po bieżącej (między wydrukami: dla następnego wydruku), np. żeby włożyć magnesy (wymaga standardowych
   makr pauzy z Mainsail/Fluidd i slicera, który podaje numery warstw), oraz
